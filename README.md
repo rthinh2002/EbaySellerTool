@@ -19,13 +19,20 @@ A console tool for bulk-listing raw TCG single cards (Yu-Gi-Oh!, Riftbound, and 
 5. `bulkPublishOffer`: returns a listing ID or error for each offer.
 6. Print a success/failure summary and write `results_<timestamp>.xlsx` next to the input file.
 
-## Planned commands
+## Usage
+
+```
+dotnet run --project src/EbaySellerTool.Cli -- template cards.xlsx   # create a blank input sheet
+dotnet run --project src/EbaySellerTool.Cli -- validate cards.xlsx   # check the sheet for errors
+```
+
+The template has a **Cards** sheet (required headers highlighted in orange; hover a header for help) and an **Instructions** sheet describing every column. Image paths can be relative to the Excel file's folder, and multiple images are separated with `|`.
+
+### Planned commands
 
 ```
 ebaytool auth                 # one-time OAuth login (stores refresh token locally)
 ebaytool setup                # fetch business policy IDs, create inventory location, cache category aspects
-ebaytool template <file.xlsx> # generate a blank input sheet
-ebaytool validate <file.xlsx> # dry run
 ebaytool list <file.xlsx> [--sandbox]
 ```
 

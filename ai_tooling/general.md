@@ -64,22 +64,43 @@ ai_tooling/                Guidance for AI agents (this folder)
 - Listings created through the Inventory API should be revised through the API, not Seller Hub.
 - Riftbound is a newer game, so check whether eBay AU has a `Game` aspect value for it.
 
-## Planned CLI commands
+## CLI commands
 
 ```
-ebaytool auth                  One-time OAuth login
-ebaytool setup                 Fetch policies, create location, cache category aspects
-ebaytool template <file.xlsx>  Generate a blank input sheet
-ebaytool validate <file.xlsx>  Dry run with no changes on eBay
-ebaytool list <file.xlsx> [--sandbox]
+ebaytool template <file.xlsx> [--force]  Generate a blank input sheet           (done)
+ebaytool validate <file.xlsx>            Check a sheet; no changes on eBay     (done)
+ebaytool auth                            One-time OAuth login                  (planned)
+ebaytool setup                           Fetch policies, create location, cache category aspects (planned)
+ebaytool list <file.xlsx> [--sandbox]                                          (planned)
 ```
+
+Exit codes: `0` success, `1` validation errors found, `2` invalid input (missing file, wrong extension).
+
+## Excel input format
+
+- Sheet **`Cards`** (the first sheet is used if there's no `Cards` sheet). Row 1 holds the headers; each row after it is one listing. Blank rows are skipped.
+- Header matching ignores case, spaces and underscores (`Card Name` = `CardName`).
+- Column definitions (the single source of truth) live in `Core/Excel/ListingColumns.cs`. The template's `Instructions` sheet is generated from them.
+- **Required:** `Game`, `CardName`, `CardCondition`, `Price`, `Images`.
+- **Optional:** `SKU`, `Title`, `SetName`, `CardNumber`, `Rarity`, `Language`, `Quantity` (default 1), `StoreCategory`, `CategoryId`, `Description`.
+- **Extra item specifics:** any `Aspect:<Name>` column (for example `Aspect:Edition`).
+- **CardCondition:** `Near Mint or Better`, `Lightly Played (Excellent)`, `Moderately Played (Very Good)`, `Heavily Played (Poor)`, or the codes `NM` / `LP` / `MP` / `HP`. The template shows these as a dropdown.
+- **Images:** local paths separated by `|` (max 24). Relative paths are resolved from the Excel file's folder, and quotes from Explorer's "Copy as path" are stripped.
+- **Generated values:** a blank `SKU` becomes `CARDNUMBER-RARITY-CONDITION` (deterministic, so re-runs are safe; needs `CardNumber`). A blank `Title` is built from CardName, CardNumber, Rarity, SetName, Game and the condition code, skipping any part that would push it past 80 characters.
+
+## Import pipeline (Core)
+
+`ListingImportService` → `IListingSheetReader` (Excel → `ListingRow`) → `ICardListingParser` (row → `CardListing`, reporting type and required-field errors) → `ICardListingValidator` (runs every `IListingRule` and `IListingBatchRule` registered in DI).
+
+- Every problem on a row is reported together, and one bad row never stops the others.
+- **To add a validation rule:** implement `IListingRule` (per listing) or `IListingBatchRule` (across listings, such as duplicate SKUs), then register it in `ServiceCollectionExtensions.AddListingValidation`.
 
 ## Features
 
 | Feature | Status |
 |---|---|
 | Solution structure (Core / Cli / Tests) | Done |
-| Excel template, parser and validation | Planned |
+| Excel template, parser and validation (`template`, `validate`) | Done |
 | OAuth and token storage | Planned |
 | Setup command (policies, location, aspects) | Planned |
 | Image upload via Media API | Planned |
@@ -89,3 +110,4 @@ ebaytool list <file.xlsx> [--sandbox]
 ## Changelog
 
 - **2026-09-25**: Initial solution (Core, Cli, Tests), README, public GitHub repo `rthinh2002/EbaySellerTool`. Added `ai_tooling/` agent guidance.
+- **2026-09-25**: Excel template generation, sheet reader, row parser, validation rules (title, SKU, price, quantity, images, category ID, duplicate SKUs), and the `template` / `validate` CLI commands (System.CommandLine + Spectre.Console). Auto-generated SKU and title. 43 unit tests.
