@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\EbaySellerTool.Core\EbaySellerTool.Core.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>ebaytool</AssemblyName>
+    <RootNamespace>EbaySellerTool.Cli</RootNamespace>
+    <UserSecretsId>ebay-seller-tool-cli</UserSecretsId>
+  </PropertyGroup>
+
+</Project>

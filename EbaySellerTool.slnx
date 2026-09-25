@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/EbaySellerTool.Cli/EbaySellerTool.Cli.csproj" />
+    <Project Path="src/EbaySellerTool.Core/EbaySellerTool.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EbaySellerTool.Tests/EbaySellerTool.Tests.csproj" />
+  </Folder>
+</Solution>
