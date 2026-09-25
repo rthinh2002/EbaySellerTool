@@ -27,6 +27,26 @@ dotnet run --project src/EbaySellerTool.Cli -- validate cards.xlsx   # check the
 dotnet run --project src/EbaySellerTool.Cli -- list cards.xlsx --dry-run   # preview the eBay requests
 ```
 
+### Scanning cards
+
+Scan up to 9 card fronts at once on an A4 flatbed (3×3 grid), then split the scan into one image per card:
+
+```
+dotnet run --project src/EbaySellerTool.Cli -- split scans --output images --sheet cards.xlsx
+```
+
+`split` takes a scan or a folder of scans, straightens and crops each card to `images/<scan>_card01.jpg`, … (numbered left to right, top to bottom), and adds a row per card to the sheet with **Images** already filled in. You only type the card details.
+
+For best results:
+- Scan at **600 DPI**.
+- Leave a gap between cards.
+- Keep cards about **1 cm from the glass edges**, where scanners leave shadow lines.
+- Plain white backgrounds work for dark-bordered cards.
+
+In Visual Studio, pick a launch profile (Validate, List (dry run), Split scans, Template) next to the ▶ button. They run against the `samples/` folder.
+
+### Dry run
+
 `list --dry-run` writes two files next to the sheet:
 
 - `dryrun_<sheet>_<timestamp>.json`: the exact eBay requests that would be sent (inventory items and offers, in batches of 25)

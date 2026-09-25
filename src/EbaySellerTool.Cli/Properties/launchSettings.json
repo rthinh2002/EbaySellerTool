@@ -10,6 +10,11 @@
       "commandLineArgs": "list cards.xlsx --dry-run",
       "workingDirectory": "$(ProjectDir)..\\..\\samples"
     },
+    "Split scans": {
+      "commandName": "Project",
+      "commandLineArgs": "split scans --sheet scanned_cards.xlsx",
+      "workingDirectory": "$(ProjectDir)..\\..\\samples"
+    },
     "Template": {
       "commandName": "Project",
       "commandLineArgs": "template new_cards.xlsx",

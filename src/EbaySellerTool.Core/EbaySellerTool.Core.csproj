@@ -10,6 +10,7 @@
     <PackageReference Include="ClosedXML" Version="0.105.1" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.12" />
+    <PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" />
   </ItemGroup>
 
   <ItemGroup>

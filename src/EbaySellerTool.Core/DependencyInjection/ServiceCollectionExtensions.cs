@@ -5,6 +5,7 @@ using EbaySellerTool.Core.Excel;
 using EbaySellerTool.Core.Import;
 using EbaySellerTool.Core.Listing.DryRun;
 using EbaySellerTool.Core.Reporting;
+using EbaySellerTool.Core.Scanning;
 using EbaySellerTool.Core.Validation;
 using EbaySellerTool.Core.Validation.Rules;
 using Microsoft.Extensions.Configuration;
@@ -29,6 +30,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IListingRequestMapper, ListingRequestMapper>();
         services.AddSingleton<IDryRunPlanner, DryRunPlanner>();
         services.AddSingleton<IListingReportWriter, ListingReportWriter>();
+
+        services.AddSingleton<IListingSheetAppender, ListingSheetAppender>();
+        services.AddSingleton<ICardDetector, CardDetector>();
+        services.AddSingleton<ICardCropper, CardCropper>();
+        services.AddSingleton<IScanSplitter, ScanSplitter>();
 
         return services;
     }

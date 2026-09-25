@@ -89,11 +89,26 @@ ai_tooling/                Guidance for AI agents (this folder)
 - `DryRunPlanner` builds the exact bulk requests without calling eBay. Local `file:///` URIs stand in for image URLs.
 - `ListingReportWriter` writes `results_<sheet>_<timestamp>.xlsx`: Row, SKU, Title, Status (colour-coded), Listing ID, Listing URL (hyperlink), Offer ID, Errors, Warnings.
 
+## Scan splitting (Core/Scanning)
+
+The owner scans card **fronts** on an A4 flatbed (HP printer via HP Smart), up to 9 cards in a 3×3 grid on a **white** background. Back scanning is intentionally out of scope for now and may be added later (front and back paired by grid position).
+
+- `CardDetector` (OpenCvSharp) builds a foreground mask: pixels that are darker than the background **or** saturated (to catch pale coloured borders). It then applies a morphological close to fill small gaps and an **open** to remove the thin shadow lines scanners leave along the glass edges; both kernel sizes scale with the image. External contours are kept when they're big enough, close to the 63×88 mm card ratio (±0.2) and rectangular enough (≥0.85).
+- `CardCropper` warps each `RotatedRect` to an upright portrait image, which straightens slightly rotated cards.
+- `CardReadingOrder` numbers cards row by row, left to right, tolerating uneven rows.
+- `ScanSplitter` saves `<scan>_card01.jpg`, `<scan>_card02.jpg`, … (JPEG quality 95).
+- `ListingSheetAppender` adds one row per image to the Excel sheet with only `Images` filled in (as a path relative to the sheet), skipping images already listed.
+- **Packages:** `OpenCvSharp4` (managed) is in Core, and the native `OpenCvSharp4.runtime.win` is in Cli and Tests. A Linux host (the future web API) would need the Linux runtime package instead.
+- The regression test uses a real scan at `tests/EbaySellerTool.Tests/TestData/riftbound_scan.jpg` (9 Riftbound cards, two touching the scanner's edge shadows).
+- **Scanning tips for users:** 600 DPI (the CLI warns under 1600 px on the longest side), a gap between cards, and about 1 cm from the glass edges.
+
 ## CLI commands
 
 ```
 ebaytool template <file.xlsx> [--force]  Generate a blank input sheet                          (done)
 ebaytool validate <file.xlsx>            Check a sheet; no changes on eBay                    (done)
+ebaytool split <scan|folder> [--output images] [--sheet file.xlsx]
+                                         Cut scans into one image per card; add rows to sheet (done)
 ebaytool list <file.xlsx> --dry-run      Write dryrun_*.json (eBay requests) + results_*.xlsx (done)
 ebaytool list <file.xlsx>                Live listing                (needs the eBay HTTP clients)
 ebaytool auth                            One-time OAuth login                                 (planned)
@@ -130,6 +145,8 @@ Exit codes: `0` success, `1` validation errors or failed listings, `2` invalid i
 | eBay request mapping, description template, settings | Done |
 | Listing pipeline (batching, steps, per-item results, re-run handling) | Done (tested with fakes) |
 | Results report (`results_*.xlsx`) and `list --dry-run` | Done |
+| Scan splitting: one image per card, rows added to the sheet (`split`) | Done (fronts only) |
+| Back scans paired with fronts | Future |
 | HTTP clients for Inventory and Media APIs | Planned (needs developer keys) |
 | OAuth and token storage | Planned |
 | Setup command (policies, location, aspects) | Planned |
@@ -142,3 +159,4 @@ Exit codes: `0` success, `1` validation errors or failed listings, `2` invalid i
 - **2026-09-25**: Initial solution (Core, Cli, Tests), README, public GitHub repo `rthinh2002/EbaySellerTool`. Added `ai_tooling/` agent guidance.
 - **2026-09-25**: Excel template generation, sheet reader, row parser, validation rules (title, SKU, price, quantity, images, category ID, duplicate SKUs), and the `template` / `validate` CLI commands (System.CommandLine + Spectre.Console). Auto-generated SKU and title. 43 unit tests.
 - **2026-09-25**: eBay Inventory API request/response models and `ListingRequestMapper` (Ungraded condition + Card Condition descriptor, item specifics, AUD pricing, store category, policies). HTML description templates. `appsettings.json` settings. Listing pipeline (`ListingService` + image/inventory/offer/publish steps) with re-run handling, tested against a fake eBay client. Colour-coded `results_*.xlsx` report. `list --dry-run` command. 73 unit tests.
+- **2026-09-25**: Visual Studio launch profiles (`samples/` working folder) and a sample sheet. `split` command: OpenCV card detection on white-background flatbed scans, straightening and cropping, reading-order numbering, and adding rows to the sheet. 83 unit tests.

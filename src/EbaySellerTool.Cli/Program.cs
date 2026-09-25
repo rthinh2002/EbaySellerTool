@@ -14,9 +14,11 @@ builder.Logging.SetMinimumLevel(LogLevel.Warning);
 builder.Services.AddEbaySellerToolCore(builder.Configuration);
 builder.Services.AddSingleton<ImportResultRenderer>();
 builder.Services.AddSingleton<ListingRunRenderer>();
+builder.Services.AddSingleton<ScanSplitRenderer>();
 builder.Services.AddSingleton<ICliCommand, TemplateCommand>();
 builder.Services.AddSingleton<ICliCommand, ValidateCommand>();
 builder.Services.AddSingleton<ICliCommand, ListCommand>();
+builder.Services.AddSingleton<ICliCommand, SplitCommand>();
 
 using var host = builder.Build();
 
