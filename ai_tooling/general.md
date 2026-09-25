@@ -64,17 +64,43 @@ ai_tooling/                Guidance for AI agents (this folder)
 - Listings created through the Inventory API should be revised through the API, not Seller Hub.
 - Riftbound is a newer game, so check whether eBay AU has a `Game` aspect value for it.
 
+**Values to verify against the live API** (from eBay docs, not yet confirmed):
+
+- Raw cards use condition `USED_VERY_GOOD` (Ungraded, ID 4000) plus condition descriptor `40001` (Card Condition), with values `400010` NM, `400011` LP, `400012` MP, `400013` HP. See `Ebay/Inventory/EbayCardConditions.cs`.
+- Aspect names `Game`, `Card Name`, `Set`, `Card Number`, `Rarity`, `Language` (`CardAspectNames.cs`). The Taxonomy API will confirm them.
+- Default category `183454` (CCG Individual Cards) on EBAY_AU.
+
+## Configuration
+
+`src/EbaySellerTool.Cli/appsettings.json` (copied to the build output), overridden by user-secrets:
+
+- `Ebay`: `Environment` (Sandbox/Production), `MarketplaceId` (EBAY_AU), `Currency` (AUD), `Locale` (en_AU). Bound to `EbayOptions`.
+- `ListingDefaults`: `CategoryId`, `MerchantLocationKey`, `FulfillmentPolicyId`, `PaymentPolicyId`, `ReturnPolicyId`, `DescriptionTemplatePath`. Bound to `ListingDefaultsOptions`. All except the template are required for live listing; `GetMissingRequiredSettings()` reports the gaps. The `setup` command will fill these in.
+
+## Listing pipeline (Core/Listing)
+
+- `ListingService` splits the cards into batches of 25 and runs the `IListingStep`s in order on the still-active `ListingJob`s: `ImageUploadStep` → `InventoryItemStep` → `OfferStep` → `PublishStep`.
+- Each `ListingJob` tracks one card: image URLs, offer ID, listing ID, errors, warnings and final status (`Listed`, `Revised`, `Failed`). Rows that failed validation become `Invalid`, and dry runs are `DryRun`.
+- **Re-runs:** if creating an offer fails, `OfferStep` looks up an existing offer for the SKU and updates it. If that offer is already live, the update revises the listing (`Revised`); otherwise it goes on to publish.
+- An `EbayApiException` (the whole request failed) fails only the jobs in that batch; later batches still run.
+- eBay access goes through `IEbayInventoryClient` and `IImageUploader` (Media API). **Neither has an HTTP implementation yet**, so `ListingService` and its steps aren't registered in DI. Register them in pipeline order once the clients exist.
+- `ListingRequestMapper` turns a `CardListing` into eBay `InventoryItemRequest` / `OfferRequest` DTOs (`Ebay/Inventory/Models`, serialised with `EbayJson.Options`).
+- `ListingDescriptionBuilder` fills an HTML template (the embedded `Descriptions/DefaultDescriptionTemplate.html`, or `DescriptionTemplatePath`) with `{{Title}}`, `{{Game}}`, `{{CardName}}`, `{{SetName}}`, `{{CardNumber}}`, `{{Rarity}}`, `{{Language}}`, `{{Condition}}`, `{{Details}}` (list of filled-in fields) and `{{Description}}` (the row's own text). Values are HTML-encoded.
+- `DryRunPlanner` builds the exact bulk requests without calling eBay. Local `file:///` URIs stand in for image URLs.
+- `ListingReportWriter` writes `results_<sheet>_<timestamp>.xlsx`: Row, SKU, Title, Status (colour-coded), Listing ID, Listing URL (hyperlink), Offer ID, Errors, Warnings.
+
 ## CLI commands
 
 ```
-ebaytool template <file.xlsx> [--force]  Generate a blank input sheet           (done)
-ebaytool validate <file.xlsx>            Check a sheet; no changes on eBay     (done)
-ebaytool auth                            One-time OAuth login                  (planned)
+ebaytool template <file.xlsx> [--force]  Generate a blank input sheet                          (done)
+ebaytool validate <file.xlsx>            Check a sheet; no changes on eBay                    (done)
+ebaytool list <file.xlsx> --dry-run      Write dryrun_*.json (eBay requests) + results_*.xlsx (done)
+ebaytool list <file.xlsx>                Live listing                (needs the eBay HTTP clients)
+ebaytool auth                            One-time OAuth login                                 (planned)
 ebaytool setup                           Fetch policies, create location, cache category aspects (planned)
-ebaytool list <file.xlsx> [--sandbox]                                          (planned)
 ```
 
-Exit codes: `0` success, `1` validation errors found, `2` invalid input (missing file, wrong extension).
+Exit codes: `0` success, `1` validation errors or failed listings, `2` invalid input (missing file, wrong extension), `3` feature not available yet.
 
 ## Excel input format
 
@@ -101,6 +127,10 @@ Exit codes: `0` success, `1` validation errors found, `2` invalid input (missing
 |---|---|
 | Solution structure (Core / Cli / Tests) | Done |
 | Excel template, parser and validation (`template`, `validate`) | Done |
+| eBay request mapping, description template, settings | Done |
+| Listing pipeline (batching, steps, per-item results, re-run handling) | Done (tested with fakes) |
+| Results report (`results_*.xlsx`) and `list --dry-run` | Done |
+| HTTP clients for Inventory and Media APIs | Planned (needs developer keys) |
 | OAuth and token storage | Planned |
 | Setup command (policies, location, aspects) | Planned |
 | Image upload via Media API | Planned |
@@ -111,3 +141,4 @@ Exit codes: `0` success, `1` validation errors found, `2` invalid input (missing
 
 - **2026-09-25**: Initial solution (Core, Cli, Tests), README, public GitHub repo `rthinh2002/EbaySellerTool`. Added `ai_tooling/` agent guidance.
 - **2026-09-25**: Excel template generation, sheet reader, row parser, validation rules (title, SKU, price, quantity, images, category ID, duplicate SKUs), and the `template` / `validate` CLI commands (System.CommandLine + Spectre.Console). Auto-generated SKU and title. 43 unit tests.
+- **2026-09-25**: eBay Inventory API request/response models and `ListingRequestMapper` (Ungraded condition + Card Condition descriptor, item specifics, AUD pricing, store category, policies). HTML description templates. `appsettings.json` settings. Listing pipeline (`ListingService` + image/inventory/offer/publish steps) with re-run handling, tested against a fake eBay client. Colour-coded `results_*.xlsx` report. `list --dry-run` command. 73 unit tests.

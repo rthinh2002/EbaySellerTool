@@ -2,17 +2,21 @@ using System.CommandLine;
 using EbaySellerTool.Cli.Commands;
 using EbaySellerTool.Cli.Rendering;
 using EbaySellerTool.Core.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-var builder = Host.CreateApplicationBuilder();
+var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings { ContentRootPath = AppContext.BaseDirectory });
+builder.Configuration.AddUserSecrets<Program>(optional: true);
 builder.Logging.SetMinimumLevel(LogLevel.Warning);
 
-builder.Services.AddEbaySellerToolCore();
+builder.Services.AddEbaySellerToolCore(builder.Configuration);
 builder.Services.AddSingleton<ImportResultRenderer>();
+builder.Services.AddSingleton<ListingRunRenderer>();
 builder.Services.AddSingleton<ICliCommand, TemplateCommand>();
 builder.Services.AddSingleton<ICliCommand, ValidateCommand>();
+builder.Services.AddSingleton<ICliCommand, ListCommand>();
 
 using var host = builder.Build();
 

@@ -19,15 +19,9 @@ internal sealed class ValidateCommand(IListingImportService importService, Impor
 
     private int Execute(FileInfo file)
     {
-        if (!file.Exists)
+        if (ExcelFiles.FindInputFileProblem(file) is { } problem)
         {
-            AnsiConsole.MarkupLineInterpolated($"[red]File not found:[/] {file.FullName}");
-            return ExitCodes.InvalidInput;
-        }
-
-        if (!ExcelFiles.HasExcelExtension(file))
-        {
-            AnsiConsole.MarkupLineInterpolated($"[red]Expected an {ExcelFiles.Extension} file:[/] {file.FullName}");
+            AnsiConsole.MarkupLineInterpolated($"[red]{problem}[/]");
             return ExitCodes.InvalidInput;
         }
 

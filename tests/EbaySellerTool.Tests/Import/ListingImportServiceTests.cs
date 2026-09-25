@@ -1,5 +1,4 @@
 using ClosedXML.Excel;
-using EbaySellerTool.Core.DependencyInjection;
 using EbaySellerTool.Core.Excel;
 using EbaySellerTool.Core.Import;
 using EbaySellerTool.Tests.TestSupport;
@@ -10,7 +9,7 @@ namespace EbaySellerTool.Tests.Import;
 public sealed class ListingImportServiceTests : IDisposable
 {
     private readonly TemporaryDirectory _directory = new();
-    private readonly ServiceProvider _services = new ServiceCollection().AddEbaySellerToolCore().BuildServiceProvider();
+    private readonly ServiceProvider _services = TestSettings.CreateCoreServices();
 
     private IListingImportService ImportService => _services.GetRequiredService<IListingImportService>();
 
