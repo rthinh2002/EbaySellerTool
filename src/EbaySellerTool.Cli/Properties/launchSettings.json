@@ -1,0 +1,23 @@
+﻿{
+  "profiles": {
+    "Validate": {
+      "commandName": "Project",
+      "commandLineArgs": "validate cards.xlsx",
+      "workingDirectory": "$(ProjectDir)..\\..\\samples"
+    },
+    "List (dry run)": {
+      "commandName": "Project",
+      "commandLineArgs": "list cards.xlsx --dry-run",
+      "workingDirectory": "$(ProjectDir)..\\..\\samples"
+    },
+    "Template": {
+      "commandName": "Project",
+      "commandLineArgs": "template new_cards.xlsx",
+      "workingDirectory": "$(ProjectDir)..\\..\\samples"
+    },
+    "Help": {
+      "commandName": "Project",
+      "commandLineArgs": "--help"
+    }
+  }
+}

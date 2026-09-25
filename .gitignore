@@ -480,3 +480,8 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# EbaySellerTool output files
+dryrun_*.json
+results_*.xlsx
+
