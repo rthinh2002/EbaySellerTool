@@ -5,6 +5,7 @@ using EbaySellerTool.Core.Ebay;
 using EbaySellerTool.Core.Ebay.Account;
 using EbaySellerTool.Core.Ebay.Auth;
 using EbaySellerTool.Core.Ebay.Inventory;
+using EbaySellerTool.Core.Ebay.Stores;
 using Microsoft.Extensions.Options;
 using Spectre.Console;
 
@@ -13,6 +14,7 @@ namespace EbaySellerTool.Cli.Commands;
 internal sealed class SetupCommand(
     IEbayAccountClient accountClient,
     IEbayLocationClient locationClient,
+    IStoreCategoryCatalog storeCategoryCatalog,
     IOptions<EbayOptions> ebayOptions) : ICliCommand
 {
     private const string DefaultLocationKey = "home";
@@ -26,18 +28,27 @@ internal sealed class SetupCommand(
         var postcodeOption = new Option<string?>("--postcode") { Description = "Postcode of the new inventory location." };
         var suburbOption = new Option<string?>("--suburb") { Description = "Suburb of the new inventory location." };
         var stateOption = new Option<string?>("--state") { Description = "State of the new inventory location, e.g. NSW." };
+        var policyOptions = Enum.GetValues<BusinessPolicyType>().ToDictionary(
+            type => type,
+            type => new Option<string?>($"--{type.ToString().ToLowerInvariant()}-policy") { Description = $"ID or name of the {type.ToString().ToLowerInvariant()} policy to use." });
 
         var command = new Command("setup", "Choose your business policies and inventory location for listings.")
         {
             yesOption, postcodeOption, suburbOption, stateOption
         };
+        foreach (var policyOption in policyOptions.Values)
+        {
+            command.Options.Add(policyOption);
+        }
+
         command.SetAction((parseResult, cancellationToken) => ExecuteAsync(
             new SetupAnswers(
                 parseResult.GetValue(yesOption),
                 AnsiConsole.Profile.Capabilities.Interactive,
                 parseResult.GetValue(postcodeOption),
                 parseResult.GetValue(suburbOption),
-                parseResult.GetValue(stateOption)),
+                parseResult.GetValue(stateOption),
+                policyOptions.ToDictionary(entry => entry.Key, entry => parseResult.GetValue(entry.Value))),
             cancellationToken));
 
         return command;
@@ -58,6 +69,7 @@ internal sealed class SetupCommand(
             }
 
             SaveSettings(policies, location);
+            await StoreCategoryRefresh.TryRefreshAsync(storeCategoryCatalog, cancellationToken);
             return ExitCodes.Success;
         }
         catch (EbayNotSignedInException exception)
@@ -94,10 +106,49 @@ internal sealed class SetupCommand(
             return null;
         }
 
-        return policiesByType.ToDictionary(
-            entry => entry.Key,
-            entry => Choose($"{entry.Key} policy", entry.Value, policy => policy.Name, answers));
+        var chosenPolicies = new Dictionary<BusinessPolicyType, BusinessPolicy>();
+
+        foreach (var (type, policies) in policiesByType)
+        {
+            var policy = ChoosePolicy(type, policies, answers);
+
+            if (policy is null)
+            {
+                return null;
+            }
+
+            chosenPolicies[type] = policy;
+        }
+
+        return chosenPolicies;
     }
+
+    private static BusinessPolicy? ChoosePolicy(BusinessPolicyType type, IReadOnlyList<BusinessPolicy> policies, SetupAnswers answers)
+    {
+        var description = $"{type} policy";
+        var requested = answers.PolicyChoices.GetValueOrDefault(type);
+
+        if (requested is null)
+        {
+            return Choose(description, policies, DescribePolicy, answers);
+        }
+
+        var match = policies.FirstOrDefault(policy =>
+            policy.Id == requested || string.Equals(policy.Name, requested, StringComparison.OrdinalIgnoreCase));
+
+        if (match is null)
+        {
+            AnsiConsole.MarkupLineInterpolated($"[red]No {description} matches '{requested}'.[/] Available: {string.Join(", ", policies.Select(DescribePolicy))}");
+            return null;
+        }
+
+        AnsiConsole.MarkupLineInterpolated($"Using {description}: [bold]{DescribePolicy(match)}[/]");
+        return match;
+    }
+
+    // Policies auto-created by eBay already end with their ID, e.g. "No Return Accepted (240620161025)".
+    private static string DescribePolicy(BusinessPolicy policy) =>
+        policy.Name.Contains(policy.Id, StringComparison.Ordinal) ? policy.Name : $"{policy.Name} ({policy.Id})";
 
     private async Task<bool> TryCreateSandboxPoliciesAsync(
         IReadOnlyList<BusinessPolicyType> missingTypes,
@@ -251,5 +302,11 @@ internal sealed class SetupCommand(
     private static string DescribeLocation(InventoryLocation location) =>
         $"{location.Name} ({location.MerchantLocationKey}) {location.City} {location.StateOrProvince} {location.PostalCode}".Trim();
 
-    private sealed record SetupAnswers(bool AssumeYes, bool CanPrompt, string? Postcode, string? Suburb, string? State);
+    private sealed record SetupAnswers(
+        bool AssumeYes,
+        bool CanPrompt,
+        string? Postcode,
+        string? Suburb,
+        string? State,
+        IReadOnlyDictionary<BusinessPolicyType, string?> PolicyChoices);
 }

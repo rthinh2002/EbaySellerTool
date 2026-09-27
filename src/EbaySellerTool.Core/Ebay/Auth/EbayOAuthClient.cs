@@ -54,11 +54,12 @@ public sealed class EbayOAuthClient(IHttpClientFactory httpClientFactory, IOptio
 
     public async Task<EbayToken> RefreshAsync(EbayToken token, CancellationToken cancellationToken)
     {
+        // No scope parameter: eBay then reuses the scopes the user consented to. Sending the current scope list
+        // would make refreshes fail for sign-ins made before a scope was added.
         var response = await RequestTokenAsync(new Dictionary<string, string>
         {
             ["grant_type"] = "refresh_token",
-            ["refresh_token"] = token.RefreshToken,
-            ["scope"] = EbayScopes.ToScopeParameter(EbayScopes.All)
+            ["refresh_token"] = token.RefreshToken
         }, cancellationToken);
 
         return token with

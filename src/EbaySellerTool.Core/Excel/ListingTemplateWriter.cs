@@ -1,11 +1,14 @@
 using ClosedXML.Excel;
 using EbaySellerTool.Core.Cards;
+using EbaySellerTool.Core.Ebay.Stores;
 
 namespace EbaySellerTool.Core.Excel;
 
-public sealed class ListingTemplateWriter : IListingTemplateWriter
+public sealed class ListingTemplateWriter(IStoreCategoryCache storeCategoryCache) : IListingTemplateWriter
 {
     private const int HeaderRowNumber = 1;
+    private const int ConditionListColumn = 1;
+    private const int StoreCategoryListColumn = 2;
     private const int LastInputRowNumber = 2000;
     private const double MinColumnWidth = 14;
     private const double MaxColumnWidth = 50;
@@ -19,8 +22,14 @@ public sealed class ListingTemplateWriter : IListingTemplateWriter
 
         var cardsSheet = AddCardsSheet(workbook);
         AddInstructionsSheet(workbook);
-        var listsSheet = AddListsSheet(workbook);
-        AddConditionDropdown(cardsSheet, listsSheet);
+        var listsSheet = workbook.AddWorksheet(ListingWorkbookLayout.ListsSheetName);
+        listsSheet.Hide();
+
+        // Warning (not Stop) so short codes like "NM" can still be typed in.
+        AddDropdown(cardsSheet, ListingColumns.CardCondition, listsSheet, ConditionListColumn, CardConditions.AllDisplayNames, XLErrorStyle.Warning);
+
+        var storeCategoryPaths = storeCategoryCache.Load()?.Select(category => category.Path).ToList() ?? [];
+        AddDropdown(cardsSheet, ListingColumns.StoreCategory, listsSheet, StoreCategoryListColumn, storeCategoryPaths, XLErrorStyle.Stop);
 
         workbook.SaveAs(filePath);
     }
@@ -69,27 +78,27 @@ public sealed class ListingTemplateWriter : IListingTemplateWriter
         sheet.Columns().AdjustToContents(1, notesRow - 1, MinColumnWidth, MaxColumnWidth * 2);
     }
 
-    private static IXLWorksheet AddListsSheet(XLWorkbook workbook)
+    private static void AddDropdown(
+        IXLWorksheet cardsSheet,
+        ColumnDefinition column,
+        IXLWorksheet listsSheet,
+        int listColumn,
+        IReadOnlyList<string> options,
+        XLErrorStyle errorStyle)
     {
-        var sheet = workbook.AddWorksheet(ListingWorkbookLayout.ListsSheetName);
-
-        for (var index = 0; index < CardConditions.AllDisplayNames.Count; index++)
+        if (options.Count == 0)
         {
-            sheet.Cell(index + 1, 1).Value = CardConditions.AllDisplayNames[index];
+            return;
         }
 
-        sheet.Hide();
-        return sheet;
-    }
+        for (var index = 0; index < options.Count; index++)
+        {
+            listsSheet.Cell(index + 1, listColumn).Value = options[index];
+        }
 
-    private static void AddConditionDropdown(IXLWorksheet cardsSheet, IXLWorksheet listsSheet)
-    {
-        var conditionOptions = listsSheet.Range(1, 1, CardConditions.AllDisplayNames.Count, 1);
-        var validation = InputRange(cardsSheet, ListingColumns.CardCondition).CreateDataValidation();
-
-        validation.List(conditionOptions, true);
-        // Warning (not Stop) so short codes like "NM" can still be typed in.
-        validation.ErrorStyle = XLErrorStyle.Warning;
+        var validation = InputRange(cardsSheet, column).CreateDataValidation();
+        validation.List(listsSheet.Range(1, listColumn, options.Count, listColumn), true);
+        validation.ErrorStyle = errorStyle;
     }
 
     private static void FormatInputColumn(IXLWorksheet sheet, ColumnDefinition column, string numberFormat) =>

@@ -3,6 +3,7 @@ using EbaySellerTool.Core.Cards;
 using EbaySellerTool.Core.Configuration;
 using EbaySellerTool.Core.Descriptions;
 using EbaySellerTool.Core.Ebay.Inventory.Models;
+using EbaySellerTool.Core.Ebay.Stores;
 using EbaySellerTool.Core.Excel;
 using Microsoft.Extensions.Options;
 
@@ -15,7 +16,6 @@ public sealed class ListingRequestMapper(
 {
     private const string FixedPriceFormat = "FIXED_PRICE";
     private const string GoodTilCancelledDuration = "GTC";
-    private const string StoreCategoryPathSeparator = "/";
 
     private readonly EbayOptions _ebay = ebayOptions.Value;
     private readonly ListingDefaultsOptions _defaults = listingDefaults.Value;
@@ -38,7 +38,7 @@ public sealed class ListingRequestMapper(
         ListingPolicies: new ListingPolicies(_defaults.FulfillmentPolicyId, _defaults.PaymentPolicyId, _defaults.ReturnPolicyId),
         PricingSummary: new PricingSummary(new Amount(listing.Price.ToString("0.00", CultureInfo.InvariantCulture), _ebay.Currency)),
         MerchantLocationKey: _defaults.MerchantLocationKey,
-        StoreCategoryNames: listing.StoreCategory is null ? null : [ToStoreCategoryPath(listing.StoreCategory)]);
+        StoreCategoryNames: listing.StoreCategory is null ? null : [StoreCategoryPaths.Normalize(listing.StoreCategory)]);
 
     private static Dictionary<string, IReadOnlyList<string>> BuildAspects(CardListing listing)
     {
@@ -70,8 +70,4 @@ public sealed class ListingRequestMapper(
     private static string[] SplitAspectValues(string value) =>
         value.Split(ListingColumns.ImagePathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    private static string ToStoreCategoryPath(string storeCategory) =>
-        storeCategory.StartsWith(StoreCategoryPathSeparator, StringComparison.Ordinal)
-            ? storeCategory
-            : StoreCategoryPathSeparator + storeCategory;
 }

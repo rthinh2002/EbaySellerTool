@@ -88,7 +88,7 @@ ai_tooling/                Guidance for AI agents (this folder)
 ## Sign-in (Core/Ebay/Auth)
 
 - **Authorization-code grant.** `ebaytool auth` opens `EbayOAuthClient.BuildConsentUrl` (random `state`, `prompt=login`). The user pastes the address of the page they land on after clicking Agree. `AuthorizationRedirect` extracts and URL-decodes `code` and checks `state`. The code is then exchanged at `/identity/v1/oauth2/token` (Basic auth with ClientId:ClientSecret, `redirect_uri` = RuName).
-- Scopes (`EbayScopes.All`): `api_scope`, `sell.inventory` (also covers the Media API), `sell.account`.
+- Scopes (`EbayScopes.All`): `api_scope`, `sell.inventory` (also covers the Media API), `sell.account`, `sell.stores` (store categories). Refreshes send **no** scope parameter, so eBay reuses the consented scopes; adding a scope therefore only needs a new `auth` for the calls that use it.
 - `EbayToken` holds the access token (about 2 h) and refresh token (about 18 months). `ITokenStore` persists it. The CLI implements it as `ProtectedFileTokenStore`: DPAPI-encrypted, in `%LOCALAPPDATA%\EbaySellerTool\token.<env>.bin`.
 - `IAccessTokenProvider` loads the token, refreshes it 5 minutes before expiry and saves it. It throws `EbayNotSignedInException` when there is no token or the refresh token has expired.
 - `EbayEndpoints` holds the sandbox and production base URLs (auth, api, apim for Media).
@@ -98,13 +98,15 @@ ai_tooling/                Guidance for AI agents (this folder)
 ## eBay API clients (Core/Ebay)
 
 - `EbayRestClient` (`Http/`) adds the bearer token, `Accept`, marketplace and `Content-Language` headers, serialises with `EbayJson.Options`, and returns `EbayResponse<T>` (status, value, errors, Location). `EnsureSuccess(operation)` throws `EbayApiException` with eBay's messages. The named HttpClient `EbayApi` uses the standard resilience handler (retries on 429/5xx, 60 s per attempt, 3 min total). Polly logs are filtered to Error in the CLI.
-- `EbayInventoryClient` (bulk inventory items, offers, publish, find and update offer), `EbayLocationClient` (list and create a WAREHOUSE location), and `EbayAccountClient` (list, create and opt in to business policies).
+- `EbayInventoryClient` (bulk inventory items, offers, publish, find and update offer), `EbayLocationClient` (list and create a WAREHOUSE location), `EbayAccountClient` (list, create and opt in to business policies), and `EbayStoreClient` (`GET sell/stores/v1/store/categories`, flattened into `/Parent/Child` paths ordered by `order`; a 403 means the sign-in lacks `sell.stores`).
 - **Images:** in Production, `CachingImageUploader` wraps `EbayMediaImageUploader`, which posts multipart to `apim.../commerce/media/v1_beta/image/create_image_from_file` and reads `imageUrl` from the body or from `GET` on the Location URI. The cache is `IImageUrlCache` keyed by the file's SHA-256; the CLI stores it as `JsonFileImageUrlCache` in `%LOCALAPPDATA%\EbaySellerTool\image-cache.<env>.json`. In the Sandbox, `SandboxPlaceholderImageUploader` returns `Ebay:SandboxPlaceholderImageUrl` (by default a sample card image from this public repo on GitHub).
-- The host registers `ITokenStore` and `IImageUrlCache`. Everything else comes from `AddEbaySellerToolCore`, including the listing pipeline.
+- **Store categories:** `IStoreCategoryCatalog.RefreshAsync` fetches them and saves them through `IStoreCategoryCache` (the CLI's `JsonFileStoreCategoryCache`, `%LOCALAPPDATA%\EbaySellerTool\store-categories.<env>.json`). They are refreshed by `store-categories`, at the end of `setup`, and before a live `list`; a failed refresh just warns and keeps the saved copy. `StoreCategoryRule` validates offline against the saved copy (exact, case-sensitive match, with a hint when only the case differs) and is skipped if nothing has been saved yet. `ListingTemplateWriter` adds a Stop-style dropdown from the saved copy in the hidden `Lists` sheet, column B (column A holds conditions).
+- The host registers `ITokenStore`, `IImageUrlCache` and `IStoreCategoryCache`. Everything else comes from `AddEbaySellerToolCore`, including the listing pipeline.
 
 ## Setup (`ebaytool setup`)
 
 - Reads the fulfillment, payment and return policies for the marketplace. If business policies are off, it asks before opting in (or opts in with `--yes`). In the Sandbox it offers to create `SandboxTestPolicies` when none exist. With several policies it asks which to use (or takes the first with `--yes` or when it can't prompt).
+- `--fulfillment-policy`, `--payment-policy` and `--return-policy` choose a policy by ID or name without prompting.
 - Chooses an existing inventory location, or creates `home` from `--postcode`, `--suburb` and `--state` (or prompts for them); the country comes from the marketplace ID.
 - Saves the IDs to `%LOCALAPPDATA%\EbaySellerTool\settings.<env>.json` under `ListingDefaults`. `Program.cs` loads that file after appsettings and user-secrets, so it overrides them.
 
@@ -147,6 +149,7 @@ ebaytool split <scan|folder> [--output images] [--sheet file.xlsx]
 ebaytool list <file.xlsx> --dry-run      Write dryrun_*.json (eBay requests) + results_*.xlsx (done)
 ebaytool list <file.xlsx>                Live listing; shows status while running             (done)
 ebaytool auth                            Sign in to eBay (OAuth); lasts about 18 months       (done)
+ebaytool store-categories                List store categories and their StoreCategory paths  (done)
 ebaytool setup [--yes] [--postcode --suburb --state]
                                          Choose policies and location; saved per environment  (done)
 ```
@@ -160,6 +163,7 @@ Exit codes: `0` success, `1` validation errors or failed listings, `2` invalid i
 - Column definitions (the single source of truth) live in `Core/Excel/ListingColumns.cs`. The template's `Instructions` sheet is generated from them.
 - **Required:** `Game`, `CardName`, `CardCondition`, `Price`, `Images`.
 - **Optional:** `SKU`, `Title`, `SetName`, `CardNumber`, `Rarity`, `Language`, `Quantity` (default 1), `StoreCategory`, `CategoryId`, `Description`.
+- **StoreCategory:** a store category path such as `/Riftbound` (the leading `/` is optional; `StoreCategoryPaths.Normalize` adds it). It is checked against the saved store categories, and the template offers them as a dropdown.
 - **Extra item specifics:** any `Aspect:<Name>` column (for example `Aspect:Edition`).
 - **CardCondition:** `Near Mint or Better`, `Lightly Played (Excellent)`, `Moderately Played (Very Good)`, `Heavily Played (Poor)`, or the codes `NM` / `LP` / `MP` / `HP`. The template shows these as a dropdown.
 - **Images:** local paths separated by `|` (max 24). Relative paths are resolved from the Excel file's folder, and quotes from Explorer's "Copy as path" are stripped.
@@ -199,3 +203,6 @@ Exit codes: `0` success, `1` validation errors or failed listings, `2` invalid i
 - **2026-09-25**: Visual Studio launch profiles (`samples/` working folder) and a sample sheet. `split` command: OpenCV card detection on white-background flatbed scans, straightening and cropping, reading-order numbering, and adding rows to the sheet. 83 unit tests.
 - **2026-09-27**: eBay developer account approved (Sandbox keys first). OAuth sign-in: `auth` command, consent URL, code exchange, automatic refresh, DPAPI token store. Per-environment credentials in user-secrets. CLI now targets `net10.0-windows`. Found that the Media API image upload doesn't work in Sandbox. 95 unit tests.
 - **2026-09-27**: eBay REST layer with retries; Inventory, Location, Account and Media clients; image URL cache; setup command; live list. First Sandbox listing published (item 110590796614) and re-run revised it. Found and handled the bulk-400, location-500 and business-policy opt-in quirks. 111 unit tests.
+- **2026-09-27**: Production keyset exempted from Marketplace Account Deletion (the tool stores no other users' data); owner signed in to Production. The default description template now carries the owner's store text (condition sentence uses `{{Condition}}`). The Production account has 17 postage policies, 1 payment policy (eBay Managed Payments), 1 return policy (No Return Accepted) and no Inventory API location yet.
+- **2026-09-27**: Production setup done: Cards Postage (240621730025), eBay Managed Payments (240620167025), No Return Accepted (240620161025), and location `home` at Kurralta Park SA 5037. Added the `sell.stores` scope and the `store-categories` command; the owner needs to run `auth` again. Setup can choose policies by option. Refreshes no longer send scopes.
+- **2026-09-27**: Store categories are saved locally, StoreCategory is validated against them, and templates get a store category dropdown. The owner's store has YU-GI-OH! Singles, Pokemon Singles, Slabs, Playmats, POKEMON Accessories, Riftbound and Other. 121 unit tests.

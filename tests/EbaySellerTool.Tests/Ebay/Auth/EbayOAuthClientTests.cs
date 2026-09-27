@@ -63,7 +63,7 @@ public class EbayOAuthClientTests
         var token = await _client.RefreshAsync(oldToken, CancellationToken.None);
 
         Assert.Equal(new EbayToken("access-2", Now.AddHours(2), "refresh-1", Now.AddDays(500)), token);
-        Assert.StartsWith("grant_type=refresh_token&refresh_token=refresh-1&scope=", _http.Requests.Single().Body);
+        Assert.Equal("grant_type=refresh_token&refresh_token=refresh-1", _http.Requests.Single().Body);
     }
 
     [Fact]

@@ -2,17 +2,22 @@
   "profiles": {
     "Validate": {
       "commandName": "Project",
-      "commandLineArgs": "validate cards.xlsx",
+      "commandLineArgs": "validate production_test.xlsx",
       "workingDirectory": "$(ProjectDir)..\\..\\samples"
     },
     "List (dry run)": {
       "commandName": "Project",
-      "commandLineArgs": "list cards.xlsx --dry-run",
+      "commandLineArgs": "list production_test.xlsx --dry-run",
       "workingDirectory": "$(ProjectDir)..\\..\\samples"
     },
     "List (live on eBay)": {
       "commandName": "Project",
-      "commandLineArgs": "list cards.xlsx",
+      "commandLineArgs": "list production_test.xlsx",
+      "workingDirectory": "$(ProjectDir)..\\..\\samples"
+    },
+    "List production_test (live on eBay)": {
+      "commandName": "Project",
+      "commandLineArgs": "list production_test.xlsx",
       "workingDirectory": "$(ProjectDir)..\\..\\samples"
     },
     "Split scans": {
@@ -32,6 +37,10 @@
     "Setup (policies and location)": {
       "commandName": "Project",
       "commandLineArgs": "setup"
+    },
+    "Store categories": {
+      "commandName": "Project",
+      "commandLineArgs": "store-categories"
     },
     "Help": {
       "commandName": "Project",

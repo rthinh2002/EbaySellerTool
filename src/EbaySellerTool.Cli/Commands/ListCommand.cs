@@ -4,6 +4,7 @@ using EbaySellerTool.Cli.Rendering;
 using EbaySellerTool.Core.Configuration;
 using EbaySellerTool.Core.Ebay;
 using EbaySellerTool.Core.Ebay.Auth;
+using EbaySellerTool.Core.Ebay.Stores;
 using EbaySellerTool.Core.Import;
 using EbaySellerTool.Core.Listing;
 using EbaySellerTool.Core.Listing.DryRun;
@@ -16,6 +17,7 @@ namespace EbaySellerTool.Cli.Commands;
 internal sealed class ListCommand(
     IListingImportService importService,
     IListingService listingService,
+    IStoreCategoryCatalog storeCategoryCatalog,
     IDryRunPlanner dryRunPlanner,
     IListingReportWriter reportWriter,
     IOptions<EbayOptions> ebayOptions,
@@ -55,6 +57,11 @@ internal sealed class ListCommand(
             AnsiConsole.MarkupLineInterpolated($"[red]Not configured yet:[/] {string.Join(", ", missingSettings)}");
             AnsiConsole.MarkupLine("Run [bold]ebaytool setup[/] first.");
             return ExitCodes.InvalidInput;
+        }
+
+        if (!isDryRun)
+        {
+            await StoreCategoryRefresh.TryRefreshAsync(storeCategoryCatalog, cancellationToken);
         }
 
         var importResult = importService.Import(file.FullName);

@@ -2,6 +2,7 @@ using EbaySellerTool.Core.Configuration;
 using EbaySellerTool.Core.DependencyInjection;
 using EbaySellerTool.Core.Descriptions;
 using EbaySellerTool.Core.Ebay.Inventory;
+using EbaySellerTool.Core.Ebay.Stores;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -33,8 +34,9 @@ internal static class TestSettings
         Options.Create(ListingDefaults()),
         new ListingDescriptionBuilder(Options.Create(ListingDefaults())));
 
-    public static ServiceProvider CreateCoreServices() =>
+    public static ServiceProvider CreateCoreServices(IStoreCategoryCache? storeCategoryCache = null) =>
         new ServiceCollection()
             .AddEbaySellerToolCore(new ConfigurationBuilder().Build())
+            .AddSingleton(storeCategoryCache ?? new InMemoryStoreCategoryCache())
             .BuildServiceProvider();
 }

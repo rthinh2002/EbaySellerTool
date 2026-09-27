@@ -20,6 +20,18 @@ public class ListingDescriptionBuilderTests
     }
 
     [Fact]
+    public void Build_DefaultTemplate_IncludesStorePolicyTextWithCardCondition()
+    {
+        var listing = TestListings.Valid() with { Condition = Core.Cards.CardCondition.LightlyPlayed };
+
+        var html = CreateBuilder().Build(listing);
+
+        Assert.Contains("This card is in Lightly Played (Excellent) condition, sleeved straight out of the pack.", html);
+        Assert.Contains("Cards will be sleeved and sent in a top loader.", html);
+        Assert.Contains("All purchases are final.", html);
+    }
+
+    [Fact]
     public void Build_HtmlEncodesValuesAndKeepsLineBreaks()
     {
         var listing = TestListings.Valid() with { CardName = "Ash & <Pikachu>", Description = "Line one\nLine two" };

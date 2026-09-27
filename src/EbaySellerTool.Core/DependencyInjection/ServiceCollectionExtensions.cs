@@ -5,6 +5,7 @@ using EbaySellerTool.Core.Ebay.Auth;
 using EbaySellerTool.Core.Ebay.Http;
 using EbaySellerTool.Core.Ebay.Inventory;
 using EbaySellerTool.Core.Ebay.Media;
+using EbaySellerTool.Core.Ebay.Stores;
 using EbaySellerTool.Core.Excel;
 using EbaySellerTool.Core.Import;
 using EbaySellerTool.Core.Listing;
@@ -25,7 +26,9 @@ public static class ServiceCollectionExtensions
     private static readonly TimeSpan HttpAttemptTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan HttpTotalTimeout = TimeSpan.FromMinutes(3);
 
-    /// <remarks>The host must also register an <see cref="ITokenStore"/> and an <see cref="IImageUrlCache"/>.</remarks>
+    /// <remarks>
+    /// The host must also register an <see cref="ITokenStore"/>, an <see cref="IImageUrlCache"/> and an <see cref="IStoreCategoryCache"/>.
+    /// </remarks>
     public static IServiceCollection AddEbaySellerToolCore(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<EbayOptions>(configuration.GetSection(EbayOptions.SectionName));
@@ -76,6 +79,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IEbayAccountClient, EbayAccountClient>();
         services.AddSingleton<IEbayLocationClient, EbayLocationClient>();
         services.AddSingleton<IEbayInventoryClient, EbayInventoryClient>();
+        services.AddSingleton<IEbayStoreClient, EbayStoreClient>();
+        services.AddSingleton<IStoreCategoryCatalog, StoreCategoryCatalog>();
 
         services.AddSingleton<EbayMediaImageUploader>();
         services.AddSingleton<SandboxPlaceholderImageUploader>();
@@ -115,6 +120,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IListingRule, QuantityRule>();
         services.AddSingleton<IListingRule, ImagesRule>();
         services.AddSingleton<IListingRule, CategoryIdRule>();
+        services.AddSingleton<IListingRule, StoreCategoryRule>();
 
         services.AddSingleton<IListingBatchRule, DuplicateSkuRule>();
     }

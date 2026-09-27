@@ -13,7 +13,7 @@ public sealed class ListingSheetAppenderTests : IDisposable
     public ListingSheetAppenderTests()
     {
         _sheetPath = _directory.GetFilePath("cards.xlsx");
-        new ListingTemplateWriter().Write(_sheetPath);
+        new ListingTemplateWriter(new InMemoryStoreCategoryCache()).Write(_sheetPath);
     }
 
     [Fact]
