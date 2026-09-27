@@ -75,6 +75,17 @@ ai_tooling/                Guidance for AI agents (this folder)
 `src/EbaySellerTool.Cli/appsettings.json` (copied to the build output), overridden by user-secrets:
 
 - `Ebay`: `Environment` (Sandbox/Production), `MarketplaceId` (EBAY_AU), `Currency` (AUD), `Locale` (en_AU). Bound to `EbayOptions`.
+- `Ebay:Sandbox` / `Ebay:Production`: `ClientId`, `ClientSecret`, `RuName`. These are **user-secrets only** (`UserSecretsId` ebay-seller-tool-cli, loaded explicitly in `Program.cs`). `EbayOptions.ActiveCredentials` picks the set for the current environment.
+
+## Sign-in (Core/Ebay/Auth)
+
+- **Authorization-code grant.** `ebaytool auth` opens `EbayOAuthClient.BuildConsentUrl` (random `state`, `prompt=login`). The user pastes the address of the page they land on after clicking Agree. `AuthorizationRedirect` extracts and URL-decodes `code` and checks `state`. The code is then exchanged at `/identity/v1/oauth2/token` (Basic auth with ClientId:ClientSecret, `redirect_uri` = RuName).
+- Scopes (`EbayScopes.All`): `api_scope`, `sell.inventory` (also covers the Media API), `sell.account`.
+- `EbayToken` holds the access token (about 2 h) and refresh token (about 18 months). `ITokenStore` persists it. The CLI implements it as `ProtectedFileTokenStore`: DPAPI-encrypted, in `%LOCALAPPDATA%\EbaySellerTool\token.<env>.bin`.
+- `IAccessTokenProvider` loads the token, refreshes it 5 minutes before expiry and saves it. It throws `EbayNotSignedInException` when there is no token or the refresh token has expired.
+- `EbayEndpoints` holds the sandbox and production base URLs (auth, api, apim for Media).
+- **Sandbox limitation:** the Media API `createImageFromFile` is **not supported in Sandbox** (eBay docs), so Sandbox runs need a placeholder image URL instead of uploads.
+- The CLI targets `net10.0-windows` (DPAPI and the OpenCV Windows runtime).
 - `ListingDefaults`: `CategoryId`, `MerchantLocationKey`, `FulfillmentPolicyId`, `PaymentPolicyId`, `ReturnPolicyId`, `DescriptionTemplatePath`. Bound to `ListingDefaultsOptions`. All except the template are required for live listing; `GetMissingRequiredSettings()` reports the gaps. The `setup` command will fill these in.
 
 ## Listing pipeline (Core/Listing)
@@ -111,7 +122,7 @@ ebaytool split <scan|folder> [--output images] [--sheet file.xlsx]
                                          Cut scans into one image per card; add rows to sheet (done)
 ebaytool list <file.xlsx> --dry-run      Write dryrun_*.json (eBay requests) + results_*.xlsx (done)
 ebaytool list <file.xlsx>                Live listing                (needs the eBay HTTP clients)
-ebaytool auth                            One-time OAuth login                                 (planned)
+ebaytool auth                            Sign in to eBay (OAuth); lasts about 18 months       (done)
 ebaytool setup                           Fetch policies, create location, cache category aspects (planned)
 ```
 
@@ -148,7 +159,7 @@ Exit codes: `0` success, `1` validation errors or failed listings, `2` invalid i
 | Scan splitting: one image per card, rows added to the sheet (`split`) | Done (fronts only) |
 | Back scans paired with fronts | Future |
 | HTTP clients for Inventory and Media APIs | Planned (needs developer keys) |
-| OAuth and token storage | Planned |
+| OAuth and token storage (`auth`) | Done |
 | Setup command (policies, location, aspects) | Planned |
 | Image upload via Media API | Planned |
 | Bulk list pipeline and results report | Planned |
@@ -160,3 +171,4 @@ Exit codes: `0` success, `1` validation errors or failed listings, `2` invalid i
 - **2026-09-25**: Excel template generation, sheet reader, row parser, validation rules (title, SKU, price, quantity, images, category ID, duplicate SKUs), and the `template` / `validate` CLI commands (System.CommandLine + Spectre.Console). Auto-generated SKU and title. 43 unit tests.
 - **2026-09-25**: eBay Inventory API request/response models and `ListingRequestMapper` (Ungraded condition + Card Condition descriptor, item specifics, AUD pricing, store category, policies). HTML description templates. `appsettings.json` settings. Listing pipeline (`ListingService` + image/inventory/offer/publish steps) with re-run handling, tested against a fake eBay client. Colour-coded `results_*.xlsx` report. `list --dry-run` command. 73 unit tests.
 - **2026-09-25**: Visual Studio launch profiles (`samples/` working folder) and a sample sheet. `split` command: OpenCV card detection on white-background flatbed scans, straightening and cropping, reading-order numbering, and adding rows to the sheet. 83 unit tests.
+- **2026-09-27**: eBay developer account approved (Sandbox keys first). OAuth sign-in: `auth` command, consent URL, code exchange, automatic refresh, DPAPI token store. Per-environment credentials in user-secrets. CLI now targets `net10.0-windows`. Found that the Media API image upload doesn't work in Sandbox. 95 unit tests.

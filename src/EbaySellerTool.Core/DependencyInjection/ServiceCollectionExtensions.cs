@@ -1,5 +1,6 @@
 using EbaySellerTool.Core.Configuration;
 using EbaySellerTool.Core.Descriptions;
+using EbaySellerTool.Core.Ebay.Auth;
 using EbaySellerTool.Core.Ebay.Inventory;
 using EbaySellerTool.Core.Excel;
 using EbaySellerTool.Core.Import;
@@ -36,7 +37,18 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ICardCropper, CardCropper>();
         services.AddSingleton<IScanSplitter, ScanSplitter>();
 
+        services.AddEbayAuth();
+
         return services;
+    }
+
+    /// <remarks>The host must also register an <see cref="ITokenStore"/>.</remarks>
+    private static void AddEbayAuth(this IServiceCollection services)
+    {
+        services.AddSingleton(TimeProvider.System);
+        services.AddHttpClient(EbayOAuthClient.HttpClientName);
+        services.AddSingleton<IEbayOAuthClient, EbayOAuthClient>();
+        services.AddSingleton<IAccessTokenProvider, AccessTokenProvider>();
     }
 
     private static void AddListingValidation(this IServiceCollection services)

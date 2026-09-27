@@ -1,7 +1,9 @@
 using System.CommandLine;
 using EbaySellerTool.Cli.Commands;
 using EbaySellerTool.Cli.Rendering;
+using EbaySellerTool.Cli.Storage;
 using EbaySellerTool.Core.DependencyInjection;
+using EbaySellerTool.Core.Ebay.Auth;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -12,9 +14,11 @@ builder.Configuration.AddUserSecrets<Program>(optional: true);
 builder.Logging.SetMinimumLevel(LogLevel.Warning);
 
 builder.Services.AddEbaySellerToolCore(builder.Configuration);
+builder.Services.AddSingleton<ITokenStore, ProtectedFileTokenStore>();
 builder.Services.AddSingleton<ImportResultRenderer>();
 builder.Services.AddSingleton<ListingRunRenderer>();
 builder.Services.AddSingleton<ScanSplitRenderer>();
+builder.Services.AddSingleton<ICliCommand, AuthCommand>();
 builder.Services.AddSingleton<ICliCommand, TemplateCommand>();
 builder.Services.AddSingleton<ICliCommand, ValidateCommand>();
 builder.Services.AddSingleton<ICliCommand, ListCommand>();

@@ -20,6 +20,10 @@
       "commandLineArgs": "template new_cards.xlsx",
       "workingDirectory": "$(ProjectDir)..\\..\\samples"
     },
+    "Auth (sign in to eBay)": {
+      "commandName": "Project",
+      "commandLineArgs": "auth"
+    },
     "Help": {
       "commandName": "Project",
       "commandLineArgs": "--help"

@@ -61,7 +61,6 @@ The template has a **Cards** sheet (required headers highlighted in orange; hove
 ### Planned commands
 
 ```
-ebaytool auth                 # one-time OAuth login (stores refresh token locally)
 ebaytool setup                # fetch business policy IDs, create inventory location, cache category aspects
 ebaytool list <file.xlsx>     # live listing, once the eBay API clients are connected
 ```
@@ -71,15 +70,26 @@ ebaytool list <file.xlsx>     # live listing, once the eBay API clients are conn
 1. Sign up at <https://developer.ebay.com> with your eBay account and wait for approval (usually about a day).
 2. Under **Application Keys**, create a keyset for **Sandbox** and one for **Production** (App ID / Client ID, Cert ID / Client Secret).
 3. Complete the **Marketplace Account Deletion** notification requirement for the production keyset (or apply for the exemption, since this tool doesn't store other users' data).
-4. Under **User Tokens → Get a Token from eBay via Your Application**, create a **RuName** (redirect URL name). Note it down.
-5. Store the secrets with user-secrets. They must never be committed:
+4. Under **User Tokens → Get a Token from eBay via Your Application**, create a **RuName** (redirect URL name) and tick **OAuth Enabled**. The *Auth Accepted URL* can stay as eBay's default page.
+5. For the Sandbox, create a **Sandbox test user** (Developer portal → Sandbox → Users). You sign in with that user, not your real account.
+6. Store the credentials with user-secrets, per environment. They must never be committed:
 
    ```
-   dotnet user-secrets --project src/EbaySellerTool.Cli set "Ebay:ClientId" "<id>"
-   dotnet user-secrets --project src/EbaySellerTool.Cli set "Ebay:ClientSecret" "<secret>"
-   dotnet user-secrets --project src/EbaySellerTool.Cli set "Ebay:RuName" "<runame>"
+   dotnet user-secrets --project src/EbaySellerTool.Cli set "Ebay:Sandbox:ClientId" "<App ID>"
+   dotnet user-secrets --project src/EbaySellerTool.Cli set "Ebay:Sandbox:ClientSecret" "<Cert ID>"
+   dotnet user-secrets --project src/EbaySellerTool.Cli set "Ebay:Sandbox:RuName" "<RuName>"
    ```
+
+   Use `Ebay:Production:...` for the production keyset, and switch environments with `Ebay:Environment` in `appsettings.json`.
+
+## Signing in
+
+```
+dotnet run --project src/EbaySellerTool.Cli -- auth
+```
+
+This opens eBay's sign-in page. Sign in, click **Agree**, then copy the full address of the page you land on and paste it into the console. The tool stores the sign-in encrypted (Windows DPAPI) in `%LOCALAPPDATA%\EbaySellerTool\token.<environment>.bin` and refreshes it automatically. It lasts about 18 months.
 
 ## Status
 
-Early setup. See the roadmap above.
+Sign-in done; eBay API clients in progress.
