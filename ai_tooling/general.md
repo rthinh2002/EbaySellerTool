@@ -64,11 +64,19 @@ ai_tooling/                Guidance for AI agents (this folder)
 - Listings created through the Inventory API should be revised through the API, not Seller Hub.
 - Riftbound is a newer game, so check whether eBay AU has a `Game` aspect value for it.
 
-**Values to verify against the live API** (from eBay docs, not yet confirmed):
+**Confirmed in the EBAY_AU Sandbox (2026-09-27)** by publishing a real listing (shown as "Ungraded - Near mint or better"):
 
 - Raw cards use condition `USED_VERY_GOOD` (Ungraded, ID 4000) plus condition descriptor `40001` (Card Condition), with values `400010` NM, `400011` LP, `400012` MP, `400013` HP. See `Ebay/Inventory/EbayCardConditions.cs`.
-- Aspect names `Game`, `Card Name`, `Set`, `Card Number`, `Rarity`, `Language` (`CardAspectNames.cs`). The Taxonomy API will confirm them.
-- Default category `183454` (CCG Individual Cards) on EBAY_AU.
+- Category `183454` (CCG Individual Cards) is valid on EBAY_AU, and the aspects `Game`, `Card Name`, `Set`, `Card Number`, `Rarity`, `Language` are accepted. The Taxonomy API could still list more recommended aspects.
+- `Content-Language: en-AU` and `X-EBAY-C-MARKETPLACE-ID: EBAY_AU` headers are sent on every call.
+
+**eBay API quirks handled in code**
+
+- Bulk Inventory methods return **HTTP 400 with per-item `responses`** when every item fails. `EbayResponse` reads the body regardless of status, and `EbayInventoryClient` prefers item results over throwing.
+- `bulkCreateOffer` for an existing SKU fails with **25002** "Offer entity already exists" (the offerId is in `parameters`). `OfferStep` then uses `getOffers?sku=` and `updateOffer`.
+- `updateOffer` must not include `sku`, `marketplaceId` or `format`.
+- Sandbox `GET /location` returns **500 / 25001** while the account has no locations; `EbayLocationClient` treats that as empty.
+- Business policies need an opt-in (`/program/opt_in` `SELLING_POLICY_MANAGEMENT`); until then policy calls fail with **20403**. New Sandbox users have no policies, and `SandboxTestPolicies` creates minimal ones (AU_Regular shipping, 30-day returns, immediate pay).
 
 ## Configuration
 
@@ -86,7 +94,23 @@ ai_tooling/                Guidance for AI agents (this folder)
 - `EbayEndpoints` holds the sandbox and production base URLs (auth, api, apim for Media).
 - **Sandbox limitation:** the Media API `createImageFromFile` is **not supported in Sandbox** (eBay docs), so Sandbox runs need a placeholder image URL instead of uploads.
 - The CLI targets `net10.0-windows` (DPAPI and the OpenCV Windows runtime).
-- `ListingDefaults`: `CategoryId`, `MerchantLocationKey`, `FulfillmentPolicyId`, `PaymentPolicyId`, `ReturnPolicyId`, `DescriptionTemplatePath`. Bound to `ListingDefaultsOptions`. All except the template are required for live listing; `GetMissingRequiredSettings()` reports the gaps. The `setup` command will fill these in.
+
+## eBay API clients (Core/Ebay)
+
+- `EbayRestClient` (`Http/`) adds the bearer token, `Accept`, marketplace and `Content-Language` headers, serialises with `EbayJson.Options`, and returns `EbayResponse<T>` (status, value, errors, Location). `EnsureSuccess(operation)` throws `EbayApiException` with eBay's messages. The named HttpClient `EbayApi` uses the standard resilience handler (retries on 429/5xx, 60 s per attempt, 3 min total). Polly logs are filtered to Error in the CLI.
+- `EbayInventoryClient` (bulk inventory items, offers, publish, find and update offer), `EbayLocationClient` (list and create a WAREHOUSE location), and `EbayAccountClient` (list, create and opt in to business policies).
+- **Images:** in Production, `CachingImageUploader` wraps `EbayMediaImageUploader`, which posts multipart to `apim.../commerce/media/v1_beta/image/create_image_from_file` and reads `imageUrl` from the body or from `GET` on the Location URI. The cache is `IImageUrlCache` keyed by the file's SHA-256; the CLI stores it as `JsonFileImageUrlCache` in `%LOCALAPPDATA%\EbaySellerTool\image-cache.<env>.json`. In the Sandbox, `SandboxPlaceholderImageUploader` returns `Ebay:SandboxPlaceholderImageUrl` (by default a sample card image from this public repo on GitHub).
+- The host registers `ITokenStore` and `IImageUrlCache`. Everything else comes from `AddEbaySellerToolCore`, including the listing pipeline.
+
+## Setup (`ebaytool setup`)
+
+- Reads the fulfillment, payment and return policies for the marketplace. If business policies are off, it asks before opting in (or opts in with `--yes`). In the Sandbox it offers to create `SandboxTestPolicies` when none exist. With several policies it asks which to use (or takes the first with `--yes` or when it can't prompt).
+- Chooses an existing inventory location, or creates `home` from `--postcode`, `--suburb` and `--state` (or prompts for them); the country comes from the marketplace ID.
+- Saves the IDs to `%LOCALAPPDATA%\EbaySellerTool\settings.<env>.json` under `ListingDefaults`. `Program.cs` loads that file after appsettings and user-secrets, so it overrides them.
+
+## Listing defaults
+
+`ListingDefaults`: `CategoryId`, `MerchantLocationKey`, `FulfillmentPolicyId`, `PaymentPolicyId`, `ReturnPolicyId`, `DescriptionTemplatePath`. Bound to `ListingDefaultsOptions`. All except the template are required for live listing; `GetMissingRequiredSettings()` reports the gaps, and `setup` fills them in.
 
 ## Listing pipeline (Core/Listing)
 
@@ -94,7 +118,7 @@ ai_tooling/                Guidance for AI agents (this folder)
 - Each `ListingJob` tracks one card: image URLs, offer ID, listing ID, errors, warnings and final status (`Listed`, `Revised`, `Failed`). Rows that failed validation become `Invalid`, and dry runs are `DryRun`.
 - **Re-runs:** if creating an offer fails, `OfferStep` looks up an existing offer for the SKU and updates it. If that offer is already live, the update revises the listing (`Revised`); otherwise it goes on to publish.
 - An `EbayApiException` (the whole request failed) fails only the jobs in that batch; later batches still run.
-- eBay access goes through `IEbayInventoryClient` and `IImageUploader` (Media API). **Neither has an HTTP implementation yet**, so `ListingService` and its steps aren't registered in DI. Register them in pipeline order once the clients exist.
+- eBay access goes through `IEbayInventoryClient` and `IImageUploader`. The steps are registered in DI in pipeline order (`AddListingPipeline`); registration order is run order.
 - `ListingRequestMapper` turns a `CardListing` into eBay `InventoryItemRequest` / `OfferRequest` DTOs (`Ebay/Inventory/Models`, serialised with `EbayJson.Options`).
 - `ListingDescriptionBuilder` fills an HTML template (the embedded `Descriptions/DefaultDescriptionTemplate.html`, or `DescriptionTemplatePath`) with `{{Title}}`, `{{Game}}`, `{{CardName}}`, `{{SetName}}`, `{{CardNumber}}`, `{{Rarity}}`, `{{Language}}`, `{{Condition}}`, `{{Details}}` (list of filled-in fields) and `{{Description}}` (the row's own text). Values are HTML-encoded.
 - `DryRunPlanner` builds the exact bulk requests without calling eBay. Local `file:///` URIs stand in for image URLs.
@@ -121,9 +145,10 @@ ebaytool validate <file.xlsx>            Check a sheet; no changes on eBay      
 ebaytool split <scan|folder> [--output images] [--sheet file.xlsx]
                                          Cut scans into one image per card; add rows to sheet (done)
 ebaytool list <file.xlsx> --dry-run      Write dryrun_*.json (eBay requests) + results_*.xlsx (done)
-ebaytool list <file.xlsx>                Live listing                (needs the eBay HTTP clients)
+ebaytool list <file.xlsx>                Live listing; shows status while running             (done)
 ebaytool auth                            Sign in to eBay (OAuth); lasts about 18 months       (done)
-ebaytool setup                           Fetch policies, create location, cache category aspects (planned)
+ebaytool setup [--yes] [--postcode --suburb --state]
+                                         Choose policies and location; saved per environment  (done)
 ```
 
 Exit codes: `0` success, `1` validation errors or failed listings, `2` invalid input (missing file, wrong extension), `3` feature not available yet.
@@ -158,11 +183,12 @@ Exit codes: `0` success, `1` validation errors or failed listings, `2` invalid i
 | Results report (`results_*.xlsx`) and `list --dry-run` | Done |
 | Scan splitting: one image per card, rows added to the sheet (`split`) | Done (fronts only) |
 | Back scans paired with fronts | Future |
-| HTTP clients for Inventory and Media APIs | Planned (needs developer keys) |
+| HTTP clients for Inventory, Account and Media APIs | Done (Media is Production-only) |
 | OAuth and token storage (`auth`) | Done |
-| Setup command (policies, location, aspects) | Planned |
-| Image upload via Media API | Planned |
-| Bulk list pipeline and results report | Planned |
+| Setup command (policies, location) | Done |
+| Taxonomy API aspect checks | Future |
+| Image upload via Media API, with a cache | Done (untested until Production) |
+| Live listing (list) | Done; verified in Sandbox |
 | ASP.NET Core API + Angular UI | Future |
 
 ## Changelog
@@ -172,3 +198,4 @@ Exit codes: `0` success, `1` validation errors or failed listings, `2` invalid i
 - **2026-09-25**: eBay Inventory API request/response models and `ListingRequestMapper` (Ungraded condition + Card Condition descriptor, item specifics, AUD pricing, store category, policies). HTML description templates. `appsettings.json` settings. Listing pipeline (`ListingService` + image/inventory/offer/publish steps) with re-run handling, tested against a fake eBay client. Colour-coded `results_*.xlsx` report. `list --dry-run` command. 73 unit tests.
 - **2026-09-25**: Visual Studio launch profiles (`samples/` working folder) and a sample sheet. `split` command: OpenCV card detection on white-background flatbed scans, straightening and cropping, reading-order numbering, and adding rows to the sheet. 83 unit tests.
 - **2026-09-27**: eBay developer account approved (Sandbox keys first). OAuth sign-in: `auth` command, consent URL, code exchange, automatic refresh, DPAPI token store. Per-environment credentials in user-secrets. CLI now targets `net10.0-windows`. Found that the Media API image upload doesn't work in Sandbox. 95 unit tests.
+- **2026-09-27**: eBay REST layer with retries; Inventory, Location, Account and Media clients; image URL cache; setup command; live list. First Sandbox listing published (item 110590796614) and re-run revised it. Found and handled the bulk-400, location-500 and business-policy opt-in quirks. 111 unit tests.

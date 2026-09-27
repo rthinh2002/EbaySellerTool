@@ -58,12 +58,14 @@ Listing defaults live in `src/EbaySellerTool.Cli/appsettings.json`: marketplace 
 
 The template has a **Cards** sheet (required headers highlighted in orange; hover a header for help) and an **Instructions** sheet describing every column. Image paths can be relative to the Excel file's folder, and multiple images are separated with `|`.
 
-### Planned commands
+### Listing on eBay
 
 ```
-ebaytool setup                # fetch business policy IDs, create inventory location, cache category aspects
-ebaytool list <file.xlsx>     # live listing, once the eBay API clients are connected
+dotnet run --project src/EbaySellerTool.Cli -- setup              # once per environment: pick business policies + inventory location
+dotnet run --project src/EbaySellerTool.Cli -- list cards.xlsx    # list every valid row; writes results_*.xlsx
 ```
+
+Re-running `list` on the same sheet revises existing listings (matched by SKU) instead of duplicating them. In the **Sandbox**, eBay's image upload isn't available, so every listing uses a placeholder image (`Ebay:SandboxPlaceholderImageUrl`). Real photos are uploaded in Production.
 
 ## Getting eBay developer credentials
 
@@ -92,4 +94,4 @@ This opens eBay's sign-in page. Sign in, click **Agree**, then copy the full add
 
 ## Status
 
-Sign-in done; eBay API clients in progress.
+Working end to end in the eBay Sandbox. Production listing is next.

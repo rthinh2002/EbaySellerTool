@@ -9,6 +9,10 @@ public sealed class EbayOptions
     public string Currency { get; set; } = "AUD";
     public string Locale { get; set; } = "en_AU";
 
+    /// <summary>Public image used for every photo in the Sandbox, where eBay's image upload isn't available.</summary>
+    public string SandboxPlaceholderImageUrl { get; set; } =
+        "https://raw.githubusercontent.com/rthinh2002/EbaySellerTool/main/samples/images/riftbound_scan_card01.jpg";
+
     /// <summary>Stored in user-secrets as <c>Ebay:Sandbox:ClientId</c> and so on.</summary>
     public EbayAppCredentials Sandbox { get; set; } = new();
 

@@ -10,6 +10,11 @@
       "commandLineArgs": "list cards.xlsx --dry-run",
       "workingDirectory": "$(ProjectDir)..\\..\\samples"
     },
+    "List (live on eBay)": {
+      "commandName": "Project",
+      "commandLineArgs": "list cards.xlsx",
+      "workingDirectory": "$(ProjectDir)..\\..\\samples"
+    },
     "Split scans": {
       "commandName": "Project",
       "commandLineArgs": "split scans --sheet scanned_cards.xlsx",
@@ -23,6 +28,10 @@
     "Auth (sign in to eBay)": {
       "commandName": "Project",
       "commandLineArgs": "auth"
+    },
+    "Setup (policies and location)": {
+      "commandName": "Project",
+      "commandLineArgs": "setup"
     },
     "Help": {
       "commandName": "Project",

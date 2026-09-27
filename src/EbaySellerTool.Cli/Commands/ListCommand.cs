@@ -3,6 +3,7 @@ using System.Text.Json;
 using EbaySellerTool.Cli.Rendering;
 using EbaySellerTool.Core.Configuration;
 using EbaySellerTool.Core.Ebay;
+using EbaySellerTool.Core.Ebay.Auth;
 using EbaySellerTool.Core.Import;
 using EbaySellerTool.Core.Listing;
 using EbaySellerTool.Core.Listing.DryRun;
@@ -14,8 +15,10 @@ namespace EbaySellerTool.Cli.Commands;
 
 internal sealed class ListCommand(
     IListingImportService importService,
+    IListingService listingService,
     IDryRunPlanner dryRunPlanner,
     IListingReportWriter reportWriter,
+    IOptions<EbayOptions> ebayOptions,
     IOptions<ListingDefaultsOptions> listingDefaults,
     ImportResultRenderer importRenderer,
     ListingRunRenderer runRenderer) : ICliCommand
@@ -23,18 +26,21 @@ internal sealed class ListCommand(
     private const string DryRunFilePrefix = "dryrun";
     private const string ResultsFilePrefix = "results";
 
+    private readonly EbayOptions _ebay = ebayOptions.Value;
+
     public Command Build()
     {
         var fileArgument = new Argument<FileInfo>("file") { Description = "Excel sheet of cards to list (.xlsx)." };
         var dryRunOption = new Option<bool>("--dry-run") { Description = "Build the eBay requests and save them to a JSON file without calling eBay." };
 
         var command = new Command("list", "List the cards in an Excel sheet on eBay.") { fileArgument, dryRunOption };
-        command.SetAction(parseResult => Execute(parseResult.GetRequiredValue(fileArgument), parseResult.GetValue(dryRunOption)));
+        command.SetAction((parseResult, cancellationToken) =>
+            ExecuteAsync(parseResult.GetRequiredValue(fileArgument), parseResult.GetValue(dryRunOption), cancellationToken));
 
         return command;
     }
 
-    private int Execute(FileInfo file, bool isDryRun)
+    private async Task<int> ExecuteAsync(FileInfo file, bool isDryRun, CancellationToken cancellationToken)
     {
         if (ExcelFiles.FindInputFileProblem(file) is { } problem)
         {
@@ -42,10 +48,13 @@ internal sealed class ListCommand(
             return ExitCodes.InvalidInput;
         }
 
-        if (!isDryRun)
+        var missingSettings = listingDefaults.Value.GetMissingRequiredSettings();
+
+        if (!isDryRun && missingSettings.Count > 0)
         {
-            AnsiConsole.MarkupLine("[yellow]Live listing needs the eBay API connection, which isn't set up yet.[/] Use [bold]--dry-run[/] to preview the requests.");
-            return ExitCodes.NotAvailable;
+            AnsiConsole.MarkupLineInterpolated($"[red]Not configured yet:[/] {string.Join(", ", missingSettings)}");
+            AnsiConsole.MarkupLine("Run [bold]ebaytool setup[/] first.");
+            return ExitCodes.InvalidInput;
         }
 
         var importResult = importService.Import(file.FullName);
@@ -56,42 +65,65 @@ internal sealed class ListCommand(
             return importResult.HasErrors ? ExitCodes.ValidationFailed : ExitCodes.Success;
         }
 
-        WarnAboutMissingSettings();
-        return RunDryRun(file, importResult);
+        return isDryRun
+            ? RunDryRun(file, importResult, missingSettings)
+            : await RunLiveAsync(file, importResult, cancellationToken);
     }
 
-    private int RunDryRun(FileInfo file, ListingImportResult importResult)
+    private int RunDryRun(FileInfo file, ListingImportResult importResult, IReadOnlyList<string> missingSettings)
     {
-        var timestamp = DateTime.Now;
+        if (missingSettings.Count > 0)
+        {
+            AnsiConsole.MarkupLineInterpolated($"[yellow]Not configured yet (required for live listing):[/] {string.Join(", ", missingSettings)}");
+        }
 
+        var timestamp = DateTime.Now;
         var planPath = ExcelFiles.OutputPathNextTo(file, DryRunFilePrefix, timestamp, ".json");
         var plan = dryRunPlanner.CreatePlan(importResult.ValidListings);
         File.WriteAllText(planPath, JsonSerializer.Serialize(plan, EbayJson.IndentedOptions));
 
-        var result = new ListingRunResult(
-        [
-            .. ListingOutcomes.ForDryRun(importResult.ValidListings),
-            .. ListingOutcomes.ForInvalidRows(importResult.Errors)
-        ]);
+        var result = CombineWithInvalidRows(ListingOutcomes.ForDryRun(importResult.ValidListings), importResult);
+        var exitCode = Report(file, result, timestamp);
+        AnsiConsole.MarkupLineInterpolated($"eBay requests: [link]{planPath}[/]");
 
+        return exitCode;
+    }
+
+    private async Task<int> RunLiveAsync(FileInfo file, ListingImportResult importResult, CancellationToken cancellationToken)
+    {
+        var timestamp = DateTime.Now;
+        IEnumerable<ListingOutcome> outcomes = [];
+
+        try
+        {
+            if (importResult.ValidListings.Count > 0)
+            {
+                var runResult = await AnsiConsole.Status().StartAsync(
+                    $"Listing {importResult.ValidListings.Count} card(s) on eBay {_ebay.Environment}...",
+                    _ => listingService.ListAsync(importResult.ValidListings, cancellationToken));
+                outcomes = runResult.Outcomes;
+            }
+        }
+        catch (EbayNotSignedInException exception)
+        {
+            AnsiConsole.MarkupLineInterpolated($"[red]{exception.Message}[/]");
+            return ExitCodes.InvalidInput;
+        }
+
+        return Report(file, CombineWithInvalidRows(outcomes, importResult), timestamp);
+    }
+
+    private static ListingRunResult CombineWithInvalidRows(IEnumerable<ListingOutcome> outcomes, ListingImportResult importResult) =>
+        new([.. outcomes, .. ListingOutcomes.ForInvalidRows(importResult.Errors)]);
+
+    private int Report(FileInfo file, ListingRunResult result, DateTime timestamp)
+    {
         var reportPath = ExcelFiles.OutputPathNextTo(file, ResultsFilePrefix, timestamp, ExcelFiles.Extension);
         reportWriter.Write(result, reportPath);
 
         runRenderer.Render(result);
-        AnsiConsole.MarkupLineInterpolated($"eBay requests: [link]{planPath}[/]");
-        AnsiConsole.MarkupLineInterpolated($"Results:       [link]{reportPath}[/]");
+        AnsiConsole.MarkupLineInterpolated($"Results: [link]{reportPath}[/]");
 
         return result.HasFailures ? ExitCodes.ValidationFailed : ExitCodes.Success;
-    }
-
-    private void WarnAboutMissingSettings()
-    {
-        var missingSettings = listingDefaults.Value.GetMissingRequiredSettings();
-
-        if (missingSettings.Count > 0)
-        {
-            AnsiConsole.MarkupLineInterpolated(
-                $"[yellow]Not configured yet (required for live listing):[/] {string.Join(", ", missingSettings)}");
-        }
     }
 }
