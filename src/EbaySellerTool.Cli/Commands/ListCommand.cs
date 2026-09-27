@@ -85,7 +85,7 @@ internal sealed class ListCommand(
         }
 
         var timestamp = DateTime.Now;
-        var planPath = ExcelFiles.OutputPathNextTo(file, DryRunFilePrefix, timestamp, ".json");
+        var planPath = WorkspaceFolders.OutputFilePath(WorkspaceFolders.DryRuns, file, DryRunFilePrefix, timestamp, ".json");
         var plan = dryRunPlanner.CreatePlan(importResult.ValidListings);
         File.WriteAllText(planPath, JsonSerializer.Serialize(plan, EbayJson.IndentedOptions));
 
@@ -125,7 +125,7 @@ internal sealed class ListCommand(
 
     private int Report(FileInfo file, ListingRunResult result, DateTime timestamp)
     {
-        var reportPath = ExcelFiles.OutputPathNextTo(file, ResultsFilePrefix, timestamp, ExcelFiles.Extension);
+        var reportPath = WorkspaceFolders.OutputFilePath(WorkspaceFolders.Results, file, ResultsFilePrefix, timestamp, ExcelFiles.Extension);
         reportWriter.Write(result, reportPath);
 
         runRenderer.Render(result);

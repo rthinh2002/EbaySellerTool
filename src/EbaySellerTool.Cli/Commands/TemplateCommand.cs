@@ -31,6 +31,7 @@ internal sealed class TemplateCommand(IListingTemplateWriter templateWriter) : I
             return ExitCodes.InvalidInput;
         }
 
+        file.Directory?.Create();
         templateWriter.Write(file.FullName);
         AnsiConsole.MarkupLineInterpolated($"[green]Template created:[/] {file.FullName}");
 

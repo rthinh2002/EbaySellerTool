@@ -1,4 +1,5 @@
 using System.Globalization;
+using EbaySellerTool.Core.Recognition;
 using EbaySellerTool.Core.Scanning;
 using Spectre.Console;
 
@@ -24,6 +25,25 @@ internal sealed class ScanSplitRenderer
         AnsiConsole.Write(table);
         AnsiConsole.MarkupLineInterpolated($"Saved {results.Sum(result => result.Cards.Count)} card image(s) to {outputDirectory}");
         WarnAboutLowResolution(results);
+    }
+
+    public void RenderRecognitions(IReadOnlyList<(string ImagePath, CardRecognitionResult Result)> recognitions)
+    {
+        var table = new Table().AddColumns("Image", "Card", "Number", "Set", "Rarity");
+
+        foreach (var (imagePath, result) in recognitions)
+        {
+            var card = result.Card;
+            table.AddRow(
+                new Text(Path.GetFileName(imagePath)),
+                result.IsSuccess ? new Text(card!.CardName ?? "?") : new Markup($"[red]{Markup.Escape(result.Error)}[/]"),
+                new Text(card?.CardNumber ?? string.Empty),
+                new Text(card?.SetName ?? string.Empty),
+                new Text(card?.Rarity ?? string.Empty));
+        }
+
+        AnsiConsole.Write(table);
+        AnsiConsole.MarkupLine("[yellow]Check the details Claude read before listing; it can misread cards.[/]");
     }
 
     private static string DescribeCardSize(IReadOnlyList<CardImage> cards)

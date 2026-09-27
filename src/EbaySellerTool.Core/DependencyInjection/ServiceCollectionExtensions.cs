@@ -11,6 +11,7 @@ using EbaySellerTool.Core.Import;
 using EbaySellerTool.Core.Listing;
 using EbaySellerTool.Core.Listing.DryRun;
 using EbaySellerTool.Core.Listing.Steps;
+using EbaySellerTool.Core.Recognition;
 using EbaySellerTool.Core.Reporting;
 using EbaySellerTool.Core.Scanning;
 using EbaySellerTool.Core.Validation;
@@ -33,6 +34,7 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<EbayOptions>(configuration.GetSection(EbayOptions.SectionName));
         services.Configure<ListingDefaultsOptions>(configuration.GetSection(ListingDefaultsOptions.SectionName));
+        services.Configure<CardRecognitionOptions>(configuration.GetSection(CardRecognitionOptions.SectionName));
 
         services.AddSingleton<IListingSheetReader, ListingSheetReader>();
         services.AddSingleton<IListingTemplateWriter, ListingTemplateWriter>();
@@ -49,6 +51,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ICardDetector, CardDetector>();
         services.AddSingleton<ICardCropper, CardCropper>();
         services.AddSingleton<IScanSplitter, ScanSplitter>();
+        services.AddSingleton<ICardRecognizer, ClaudeCardRecognizer>();
 
         services.AddEbayAuth();
         services.AddEbayApiClients();

@@ -139,13 +139,34 @@ The owner scans card **fronts** on an A4 flatbed (HP printer via HP Smart), up t
 - The regression test uses a real scan at `tests/EbaySellerTool.Tests/TestData/riftbound_scan.jpg` (9 Riftbound cards, two touching the scanner's edge shadows).
 - **Scanning tips for users:** 600 DPI (the CLI warns under 1600 px on the longest side), a gap between cards, and about 1 cm from the glass edges.
 
+## Workspace layout
+
+Commands run from a workspace folder (`samples/` in this repo; the VS launch profiles set it as the working directory). Default folders are defined in `Cli/Commands/WorkspaceFolders.cs`:
+
+| Folder | Contents |
+|---|---|
+| `sheets/` | Excel sheets you fill in (`production_test.xlsx` …). Image paths in them are relative to the sheet, e.g. `..\images\x.jpg`. |
+| `scans/` | Raw flatbed scans (input to `split`). |
+| `images/` | One cropped image per card (`split` output). |
+| `results/` | `results_<sheet>_<timestamp>.xlsx` from `list` (live and dry run). |
+| `dry-runs/` | `dryrun_<sheet>_<timestamp>.json` eBay request previews. |
+
+Output folders are relative to the current directory and are created on demand.
+
+## Card recognition (Core/Recognition)
+
+- `split --sheet` reads each cropped card with **Claude vision** (`ClaudeCardRecognizer`, official `Anthropic` NuGet SDK, beta Messages endpoint) and fills `Game`, `CardName`, `SetName`, `CardNumber`, `Rarity` and `Language` in the new rows via `ListingSheetAppender.AppendCardRows` / `ScannedCardRow`. Condition, price and store category are left for the owner.
+- Model `claude-opus-5` by default (`CardRecognition:Model`). Structured output uses a JSON schema of nullable strings, so the model returns null rather than guessing. Server-side refusal fallback is enabled (`Fallbacks = new Default()` + beta `server-side-fallback-2026-07-01`). Images are downscaled to 1568 px on the longest side before sending.
+- API key: user-secrets `CardRecognition:ApiKey` or the `ANTHROPIC_API_KEY` env var. Without one, `split` only fills Images and prints a hint. `--no-recognize` skips reading on purpose. Up to 4 cards are read concurrently.
+- Failures are per card and non-fatal: the row still gets its image.
+
 ## CLI commands
 
 ```
 ebaytool template <file.xlsx> [--force]  Generate a blank input sheet                          (done)
 ebaytool validate <file.xlsx>            Check a sheet; no changes on eBay                    (done)
-ebaytool split <scan|folder> [--output images] [--sheet file.xlsx]
-                                         Cut scans into one image per card; add rows to sheet (done)
+ebaytool split <scan|folder> [--output images] [--sheet sheets/file.xlsx] [--no-recognize]
+                                         Cut scans into cards; add rows with Claude-read details (done)
 ebaytool list <file.xlsx> --dry-run      Write dryrun_*.json (eBay requests) + results_*.xlsx (done)
 ebaytool list <file.xlsx>                Live listing; shows status while running             (done)
 ebaytool auth                            Sign in to eBay (OAuth); lasts about 18 months       (done)
@@ -186,6 +207,7 @@ Exit codes: `0` success, `1` validation errors or failed listings, `2` invalid i
 | Listing pipeline (batching, steps, per-item results, re-run handling) | Done (tested with fakes) |
 | Results report (`results_*.xlsx`) and `list --dry-run` | Done |
 | Scan splitting: one image per card, rows added to the sheet (`split`) | Done (fronts only) |
+| Card details read from images with Claude (`split`) | Done |
 | Back scans paired with fronts | Future |
 | HTTP clients for Inventory, Account and Media APIs | Done (Media is Production-only) |
 | OAuth and token storage (`auth`) | Done |
@@ -206,3 +228,4 @@ Exit codes: `0` success, `1` validation errors or failed listings, `2` invalid i
 - **2026-09-27**: Production keyset exempted from Marketplace Account Deletion (the tool stores no other users' data); owner signed in to Production. The default description template now carries the owner's store text (condition sentence uses `{{Condition}}`). The Production account has 17 postage policies, 1 payment policy (eBay Managed Payments), 1 return policy (No Return Accepted) and no Inventory API location yet.
 - **2026-09-27**: Production setup done: Cards Postage (240621730025), eBay Managed Payments (240620167025), No Return Accepted (240620161025), and location `home` at Kurralta Park SA 5037. Added the `sell.stores` scope and the `store-categories` command; the owner needs to run `auth` again. Setup can choose policies by option. Refreshes no longer send scopes.
 - **2026-09-27**: Store categories are saved locally, StoreCategory is validated against them, and templates get a store category dropdown. The owner's store has YU-GI-OH! Singles, Pokemon Singles, Slabs, Playmats, POKEMON Accessories, Riftbound and Other. 121 unit tests.
+- **2026-09-27**: First real Production listing (Flame Chompers, item 398436829376), including Media API image upload. Workspace reorganised into `sheets/`, `scans/`, `images/`, `results/` and `dry-runs/`. `split` reads card details with Claude vision and fills the new rows. 122 unit tests.

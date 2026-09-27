@@ -27,15 +27,33 @@ dotnet run --project src/EbaySellerTool.Cli -- validate cards.xlsx   # check the
 dotnet run --project src/EbaySellerTool.Cli -- list cards.xlsx --dry-run   # preview the eBay requests
 ```
 
+### Workspace folders
+
+Run commands from a workspace folder (`samples/` here; the Visual Studio profiles do this). Files are kept by kind:
+
+| Folder | Contents |
+|---|---|
+| `sheets/` | Excel sheets you fill in |
+| `scans/` | Raw flatbed scans |
+| `images/` | One image per card, cut from the scans |
+| `results/` | `results_*.xlsx` from each `list` run |
+| `dry-runs/` | `dryrun_*.json` eBay request previews |
+
 ### Scanning cards
 
 Scan up to 9 card fronts at once on an A4 flatbed (3×3 grid), then split the scan into one image per card:
 
 ```
-dotnet run --project src/EbaySellerTool.Cli -- split scans --output images --sheet cards.xlsx
+dotnet run --project src/EbaySellerTool.Cli -- split scans --sheet sheets/cards.xlsx
 ```
 
-`split` takes a scan or a folder of scans, straightens and crops each card to `images/<scan>_card01.jpg`, … (numbered left to right, top to bottom), and adds a row per card to the sheet with **Images** already filled in. You only type the card details.
+`split` takes a scan or a folder of scans, straightens and crops each card to `images/<scan>_card01.jpg`, … (numbered left to right, top to bottom), and adds a row per card to the sheet with **Images** filled in. With an Anthropic API key it also reads each card with Claude and fills **Game, CardName, SetName, CardNumber, Rarity and Language**; you add condition, price and store category, and check what Claude read. Add the key once:
+
+```
+dotnet user-secrets --project src/EbaySellerTool.Cli set "CardRecognition:ApiKey" "<Anthropic API key>"
+```
+
+Use `--no-recognize` to fill only the image paths.
 
 For best results:
 - Scan at **600 DPI**.

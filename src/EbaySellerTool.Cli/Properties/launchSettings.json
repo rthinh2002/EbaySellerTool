@@ -1,33 +1,28 @@
-﻿{
+{
   "profiles": {
     "Validate": {
       "commandName": "Project",
-      "commandLineArgs": "validate production_test.xlsx",
+      "commandLineArgs": "validate sheets\\production_test.xlsx",
       "workingDirectory": "$(ProjectDir)..\\..\\samples"
     },
     "List (dry run)": {
       "commandName": "Project",
-      "commandLineArgs": "list production_test.xlsx --dry-run",
+      "commandLineArgs": "list sheets\\production_test.xlsx --dry-run",
       "workingDirectory": "$(ProjectDir)..\\..\\samples"
     },
     "List (live on eBay)": {
       "commandName": "Project",
-      "commandLineArgs": "list production_test.xlsx",
-      "workingDirectory": "$(ProjectDir)..\\..\\samples"
-    },
-    "List production_test (live on eBay)": {
-      "commandName": "Project",
-      "commandLineArgs": "list production_test.xlsx",
+      "commandLineArgs": "list sheets\\production_test.xlsx",
       "workingDirectory": "$(ProjectDir)..\\..\\samples"
     },
     "Split scans": {
       "commandName": "Project",
-      "commandLineArgs": "split scans --sheet scanned_cards.xlsx",
+      "commandLineArgs": "split scans --sheet sheets\\production_test.xlsx",
       "workingDirectory": "$(ProjectDir)..\\..\\samples"
     },
     "Template": {
       "commandName": "Project",
-      "commandLineArgs": "template new_cards.xlsx",
+      "commandLineArgs": "template sheets\\new_cards.xlsx",
       "workingDirectory": "$(ProjectDir)..\\..\\samples"
     },
     "Auth (sign in to eBay)": {

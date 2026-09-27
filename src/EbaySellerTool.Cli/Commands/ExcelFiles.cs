@@ -17,9 +17,4 @@ internal static class ExcelFiles
 
         return HasExcelExtension(file) ? null : $"Expected an {Extension} file: {file.FullName}";
     }
-
-    public static string OutputPathNextTo(FileInfo inputFile, string prefix, DateTime timestamp, string extension) =>
-        Path.Combine(
-            inputFile.DirectoryName!,
-            $"{prefix}_{Path.GetFileNameWithoutExtension(inputFile.Name)}_{timestamp:yyyyMMdd_HHmmss}{extension}");
 }

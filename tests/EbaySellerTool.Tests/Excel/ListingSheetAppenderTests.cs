@@ -1,5 +1,6 @@
 using ClosedXML.Excel;
 using EbaySellerTool.Core.Excel;
+using EbaySellerTool.Core.Recognition;
 using EbaySellerTool.Tests.TestSupport;
 
 namespace EbaySellerTool.Tests.Excel;
@@ -12,34 +13,48 @@ public sealed class ListingSheetAppenderTests : IDisposable
 
     public ListingSheetAppenderTests()
     {
-        _sheetPath = _directory.GetFilePath("cards.xlsx");
+        _sheetPath = _directory.GetFilePath(@"sheets\cards.xlsx");
+        Directory.CreateDirectory(Path.GetDirectoryName(_sheetPath)!);
         new ListingTemplateWriter(new InMemoryStoreCategoryCache()).Write(_sheetPath);
     }
 
     [Fact]
-    public void AppendImageRows_AddsRowPerImageWithPathRelativeToSheet()
+    public void AppendCardRows_AddsRowPerImageWithPathRelativeToSheet()
     {
-        string[] images = [_directory.GetFilePath(@"images\scan_card01.jpg"), _directory.GetFilePath(@"images\scan_card02.jpg")];
-
-        var addedRows = _appender.AppendImageRows(_sheetPath, images);
+        var addedRows = _appender.AppendCardRows(_sheetPath, [Row("scan_card01.jpg"), Row("scan_card02.jpg")]);
 
         Assert.Equal(2, addedRows);
-        Assert.Equal([@"images\scan_card01.jpg", @"images\scan_card02.jpg"], ReadImagesColumn());
+        Assert.Equal([@"..\images\scan_card01.jpg", @"..\images\scan_card02.jpg"], ReadColumn(ListingColumns.Images));
     }
 
     [Fact]
-    public void AppendImageRows_AddsAfterExistingRowsAndSkipsImagesAlreadyListed()
+    public void AppendCardRows_WithRecognisedDetails_FillsCardColumns()
     {
-        _appender.AppendImageRows(_sheetPath, [_directory.GetFilePath(@"images\a.jpg")]);
+        var details = new RecognizedCard("Riftbound", "Flame Chompers", "Origins", "OGN-006", "Common", "English");
 
-        var addedRows = _appender.AppendImageRows(_sheetPath, [_directory.GetFilePath(@"images\a.jpg"), _directory.GetFilePath(@"images\b.jpg")]);
+        _appender.AppendCardRows(_sheetPath, [Row("a.jpg", details), Row("b.jpg")]);
+
+        Assert.Equal(["Flame Chompers"], ReadColumn(ListingColumns.CardName));
+        Assert.Equal(["Riftbound"], ReadColumn(ListingColumns.Game));
+        Assert.Equal(["OGN-006"], ReadColumn(ListingColumns.CardNumber));
+        Assert.Equal(["Origins"], ReadColumn(ListingColumns.SetName));
+        Assert.Equal(["Common"], ReadColumn(ListingColumns.Rarity));
+        Assert.Equal(2, ReadColumn(ListingColumns.Images).Count);
+    }
+
+    [Fact]
+    public void AppendCardRows_AddsAfterExistingRowsAndSkipsImagesAlreadyListed()
+    {
+        _appender.AppendCardRows(_sheetPath, [Row("a.jpg")]);
+
+        var addedRows = _appender.AppendCardRows(_sheetPath, [Row("a.jpg"), Row("b.jpg")]);
 
         Assert.Equal(1, addedRows);
-        Assert.Equal([@"images\a.jpg", @"images\b.jpg"], ReadImagesColumn());
+        Assert.Equal([@"..\images\a.jpg", @"..\images\b.jpg"], ReadColumn(ListingColumns.Images));
     }
 
     [Fact]
-    public void AppendImageRows_SheetWithoutImagesColumn_Throws()
+    public void AppendCardRows_SheetWithoutImagesColumn_Throws()
     {
         var sheetPath = _directory.GetFilePath("other.xlsx");
         using (var workbook = new XLWorkbook())
@@ -48,18 +63,20 @@ public sealed class ListingSheetAppenderTests : IDisposable
             workbook.SaveAs(sheetPath);
         }
 
-        Assert.Throws<InvalidOperationException>(() => _appender.AppendImageRows(sheetPath, [_directory.GetFilePath("a.jpg")]));
+        Assert.Throws<InvalidOperationException>(() => _appender.AppendCardRows(sheetPath, [Row("a.jpg")]));
     }
 
     public void Dispose() => _directory.Dispose();
 
-    private List<string> ReadImagesColumn()
+    private ScannedCardRow Row(string imageName, RecognizedCard? details = null) =>
+        new(_directory.GetFilePath($@"images\{imageName}"), details);
+
+    private List<string> ReadColumn(ColumnDefinition column)
     {
         using var workbook = new XLWorkbook(_sheetPath);
-        var column = ListingColumns.IndexOf(ListingColumns.Images) + 1;
 
         return workbook.Worksheet(ListingWorkbookLayout.CardsSheetName)
-            .Column(column).CellsUsed().Skip(1)
+            .Column(ListingColumns.IndexOf(column) + 1).CellsUsed().Skip(1)
             .Select(cell => cell.GetString())
             .ToList();
     }
