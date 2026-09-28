@@ -485,3 +485,6 @@ $RECYCLE.BIN/
 dryrun_*.json
 results_*.xlsx
 
+# The listing workspace (sheets, scans, card images, results) is personal data, not source.
+samples/
+

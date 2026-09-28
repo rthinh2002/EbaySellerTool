@@ -34,7 +34,7 @@ public sealed class CardListingParser : ICardListingParser
             Game = game!,
             CardName = cardName!,
             SetName = row.GetValue(ListingColumns.SetName),
-            CardNumber = row.GetValue(ListingColumns.CardNumber),
+            CardNumber = row.GetValue(ListingColumns.CardNumber) is { } cardNumber ? CardNumbers.Normalize(cardNumber) : null,
             Rarity = row.GetValue(ListingColumns.Rarity),
             Language = row.GetValue(ListingColumns.Language),
             Condition = condition!.Value,

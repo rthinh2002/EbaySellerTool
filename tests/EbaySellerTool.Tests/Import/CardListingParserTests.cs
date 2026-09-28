@@ -106,6 +106,21 @@ public class CardListingParserTests
     }
 
     [Fact]
+    public void Parse_PrintedRiftboundCardNumber_NormalizesItForSkuAndTitle()
+    {
+        var row = ListingRowBuilder.ValidRow()
+            .With(ListingColumns.CardNumber, "OGN · 197/298")
+            .With(ListingColumns.Rarity, "Common")
+            .Build();
+
+        var listing = _parser.Parse(row, BaseDirectory).Listing!;
+
+        Assert.Equal("OGN-197", listing.CardNumber);
+        Assert.Equal("OGN-197-COMMON-NM", listing.Sku);
+        Assert.Contains("OGN-197", listing.Title);
+    }
+
+    [Fact]
     public void Parse_ProvidedSkuAndTitle_KeepsThem()
     {
         var row = ListingRowBuilder.ValidRow()
